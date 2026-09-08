@@ -1,0 +1,1479 @@
+openapi: 3.0.3
+info:
+  title: Student Management System API
+  version: 1.0.0
+  description: REST API for student enrollment, viewing, and record management
+  contact:
+    name: Student Management System
+    email: admin@schoolsystem.com
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+
+paths:
+  /api/v1/students:
+    get:
+      summary: List all students
+      operationId: listStudents
+      tags:
+        - students
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            description: Page number for pagination
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            description: Number of items per page
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Search students by first or last name (satisfies FR-003)
+        - name: gradeLevel
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 20
+            description: Filter by grade level label (free text, e.g. "9" or "K-1")
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+            description: Filter by active status
+      responses:
+        '200':
+          description: Successful response with student list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentSummary'
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      pageSize:
+                        type: integer
+                      total:
+                        type: integer
+        '401':
+          description: Unauthorized - invalid or missing authentication token
+        '403':
+          description: Forbidden - insufficient permissions
+
+    post:
+      summary: Enroll new student
+      operationId: enrollStudent
+      tags:
+        - students
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentEnrollment'
+      responses:
+        '201':
+          description: Student successfully enrolled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+        '400':
+          description: Bad request - validation failed (e.g., duplicate, missing required fields)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/students/{student_id}:
+    get:
+      summary: Get student by ID
+      operationId: getStudent
+      tags:
+        - students
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with student details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentDetail'
+        '404':
+          description: Student not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+    put:
+      summary: Update student information
+      operationId: updateStudent
+      tags:
+        - students
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentUpdate'
+      responses:
+        '200':
+          description: Student successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentResponse'
+        '400':
+          description: Bad request - validation failed
+        '404':
+          description: Student not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/enrollments:
+    post:
+      summary: Create new enrollment record
+      operationId: createEnrollment
+      tags:
+        - enrollments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentCreate'
+      responses:
+        '201':
+          description: Enrollment successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentResponse'
+        '400':
+          description: Bad request - validation failed (e.g., student already enrolled, invalid student_id)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/teachers:
+    get:
+      summary: List all teachers
+      operationId: listTeachers
+      tags:
+        - teachers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successful response with teacher list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TeacherSummary'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      summary: Create a new teacher
+      operationId: createTeacher
+      tags:
+        - teachers
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeacherCreate'
+      responses:
+        '201':
+          description: Teacher successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherResponse'
+        '400':
+          description: Bad request - validation failed
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/teachers/{teacher_id}:
+    get:
+      summary: Get teacher by ID
+      operationId: getTeacher
+      tags:
+        - teachers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teacher_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with teacher details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherDetail'
+        '404':
+          description: Teacher not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/teachers/{teacher_id}/account:
+    post:
+      summary: Create a login account for an existing teacher (optional at creation, this is the retroactive path)
+      operationId: createTeacherAccount
+      tags:
+        - teachers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teacher_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreate'
+      responses:
+        '201':
+          description: Teacher login created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          description: A login already exists for this teacher
+        '404':
+          description: Teacher not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/courses:
+    get:
+      summary: List all courses
+      operationId: listCourses
+      tags:
+        - courses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teacherId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            description: Filter by teacher
+        - name: gradeLevel
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 20
+            description: Filter by grade level label (free text, e.g. "9" or "K-1")
+      responses:
+        '200':
+          description: Successful response with course list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CourseSummary'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      summary: Create a new course
+      operationId: createCourse
+      tags:
+        - courses
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseCreate'
+      responses:
+        '201':
+          description: Course successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseResponse'
+        '400':
+          description: Bad request - validation failed
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/courses/{course_id}:
+    get:
+      summary: Get course by ID
+      operationId: getCourse
+      tags:
+        - courses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with course details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseDetail'
+        '404':
+          description: Course not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      summary: Update course information
+      operationId: updateCourse
+      tags:
+        - courses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseUpdate'
+      responses:
+        '200':
+          description: Course successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseResponse'
+        '404':
+          description: Course not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/courses/{course_id}/students:
+    get:
+      summary: List students enrolled in a course
+      operationId: listCourseStudents
+      tags:
+        - courses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with enrolled students
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentSummary'
+        '404':
+          description: Course not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      summary: Replace the roster of students assigned to a course
+      operationId: updateCourseStudents
+      tags:
+        - courses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourseRosterUpdate'
+      responses:
+        '200':
+          description: Course roster updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourseDetail'
+        '400':
+          description: Bad request - invalid or missing student IDs
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/attendance:
+    post:
+      summary: Mark daily attendance for a course
+      operationId: markAttendance
+      tags:
+        - attendance
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttendanceCreate'
+      responses:
+        '201':
+          description: Attendance successfully recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttendanceResponse'
+        '400':
+          description: Bad request - validation failed (e.g., no students selected, invalid course)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - teacher not assigned to course
+
+  /api/v1/attendance/{course_id}:
+    get:
+      summary: Get attendance records for a course
+      operationId: listCourseAttendance
+      tags:
+        - attendance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            description: Filter attendance by date
+      responses:
+        '200':
+          description: Successful response with attendance records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AttendanceDetail'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/students/{student_id}/attendance:
+    get:
+      summary: Get attendance records for a student
+      operationId: getStudentAttendance
+      tags:
+        - attendance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with student attendance records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AttendanceDetail'
+        '404':
+          description: Student not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/grades:
+    post:
+      summary: Record a grade for a student in a course
+      operationId: recordGrade
+      tags:
+        - grades
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeCreate'
+      responses:
+        '201':
+          description: Grade successfully recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeResponse'
+        '400':
+          description: Bad request - validation failed (e.g., grade outside 0-100 range)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - teacher not assigned to course
+
+  /api/v1/students/{student_id}/grades:
+    get:
+      summary: Get grades for a student
+      operationId: getStudentGrades
+      tags:
+        - grades
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: courseId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            description: Filter grades by course
+      responses:
+        '200':
+          description: Successful response with student grades
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GradeDetail'
+        '404':
+          description: Student not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/courses/{course_id}/grades:
+    get:
+      summary: Get all grades for a course
+      operationId: getCourseGrades
+      tags:
+        - grades
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with course grades
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GradeDetail'
+        '404':
+          description: Course not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/parents:
+    get:
+      summary: List all parents
+      operationId: listParents
+      tags:
+        - parents
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successful response with parent list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParentSummary'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      summary: Create a new parent record
+      operationId: createParent
+      tags:
+        - parents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParentCreate'
+      responses:
+        '201':
+          description: Parent successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParentResponse'
+        '400':
+          description: Bad request - validation failed (e.g., invalid email format)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/parents/{parent_id}/students:
+    get:
+      summary: List students linked to a parent
+      operationId: listParentStudents
+      tags:
+        - parents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: parent_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with linked students
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentSummary'
+        '404':
+          description: Parent not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/parents/{parent_id}/account:
+    post:
+      summary: Create a login account for an existing parent (optional at creation, this is the retroactive path)
+      operationId: createParentAccount
+      tags:
+        - parents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: parent_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreate'
+      responses:
+        '201':
+          description: Parent login created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '400':
+          description: A login already exists for this parent
+        '404':
+          description: Parent not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/parents/{parent_id}/portal:
+    get:
+      summary: Get parent portal data (child's grades and attendance)
+      operationId: getParentPortal
+      tags:
+        - parents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: parent_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with child's academic progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParentPortal'
+        '403':
+          description: Forbidden - parent cannot view another student's data
+        '404':
+          description: Parent not found
+        '401':
+          description: Unauthorized
+
+  /api/v1/reports/{student_id}:
+    get:
+      summary: Generate report card for a student (PDF export)
+      operationId: generateReportCard
+      tags:
+        - reports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with PDF report card
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Student not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/administrators:
+    get:
+      summary: List administrators (admin-only)
+      operationId: listAdministrators
+      tags:
+        - administrators
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successful response with administrator list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminSummary'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - not an administrator
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    StudentSummary:
+      type: object
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        first_name:
+          type: string
+        last_name:
+          type: string
+        grade_level:
+          type: string
+        active:
+          type: boolean
+        enrollment_date:
+          type: string
+          format: date
+
+    StudentDetail:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/StudentSummary'
+        - type: object
+          properties:
+            date_of_birth:
+              type: string
+              format: date
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+
+    StudentEnrollment:
+      type: object
+      required:
+        - first_name
+        - last_name
+        - date_of_birth
+        - grade_level
+      properties:
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        date_of_birth:
+          type: string
+          format: date
+        grade_level:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: School-defined grade label (e.g. "9", "K-1", "O-Level")
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        phone:
+          type: string
+          maxLength: 50
+
+    StudentUpdate:
+      type: object
+      properties:
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        phone:
+          type: string
+          maxLength: 50
+
+    StudentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        student:
+          $ref: '#/components/schemas/StudentDetail'
+        message:
+          type: string
+
+    EnrollmentCreate:
+      type: object
+      required:
+        - student_id
+        - enrolled_by
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        enrolled_by:
+          type: string
+          maxLength: 100
+        status:
+          type: string
+          enum: [active, withdrawing]
+          default: active
+
+    EnrollmentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        enrollment:
+          $ref: '#/components/schemas/EnrollmentDetail'
+        message:
+          type: string
+
+    EnrollmentDetail:
+      type: object
+      properties:
+        enrollment_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        enrolled_by:
+          type: string
+        enrollment_date:
+          type: string
+          format: date
+        status:
+          type: string
+
+    AdminSummary:
+      type: object
+      properties:
+        admin_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        status:
+          type: boolean
+
+    TeacherSummary:
+      type: object
+      properties:
+        teacher_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        subjects_taught:
+          type: string
+        status:
+          type: boolean
+
+    TeacherDetail:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/TeacherSummary'
+        - type: object
+          properties:
+            courses:
+              type: array
+              items:
+                $ref: '#/components/schemas/CourseSummary'
+
+    TeacherCreate:
+      type: object
+      required:
+        - name
+        - email
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        subjects_taught:
+          type: string
+          maxLength: 100
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Optional. If provided, a login account is created for the teacher immediately.
+
+    TeacherResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        teacher:
+          $ref: '#/components/schemas/TeacherDetail'
+        message:
+          type: string
+
+    CourseSummary:
+      type: object
+      properties:
+        course_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        teacher_id:
+          type: string
+          format: uuid
+        grade_level:
+          type: string
+        semester:
+          type: string
+        status:
+          type: string
+
+    CourseDetail:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/CourseSummary'
+        - type: object
+          properties:
+            max_students:
+              type: integer
+            students:
+              type: array
+              items:
+                $ref: '#/components/schemas/StudentSummary'
+
+    CourseCreate:
+      type: object
+      required:
+        - name
+        - teacher_id
+        - grade_level
+        - semester
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        teacher_id:
+          type: string
+          format: uuid
+        grade_level:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: School-defined grade label (e.g. "9", "K-1", "O-Level")
+        semester:
+          type: string
+          maxLength: 20
+        max_students:
+          type: integer
+          default: 30
+
+    CourseUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        teacher_id:
+          type: string
+          format: uuid
+        max_students:
+          type: integer
+        status:
+          type: string
+          enum: [active, inactive, full]
+
+    CourseResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        course:
+          $ref: '#/components/schemas/CourseDetail'
+    CourseRosterUpdate:
+      type: object
+      required:
+        - student_ids
+      properties:
+        student_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    ParentSummary:
+      type: object
+      properties:
+        parent_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        status:
+          type: boolean
+
+    ParentCreate:
+      type: object
+      required:
+        - name
+        - email
+        - phone
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        phone:
+          type: string
+          maxLength: 50
+        student_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Students to link to this parent
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Optional. If provided, a login account is created for the parent immediately.
+
+    AccountCreate:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    AccountDetail:
+      type: object
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+        user_id:
+          type: string
+          format: uuid
+
+    AccountResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        account:
+          $ref: '#/components/schemas/AccountDetail'
+        message:
+          type: string
+
+    ParentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        parent:
+          $ref: '#/components/schemas/ParentSummary'
+        message:
+          type: string
+
+    ParentPortal:
+      type: object
+      properties:
+        success:
+          type: boolean
+        parents:
+          type: array
+          items:
+            type: object
+            properties:
+              parent_id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              email:
+                type: string
+              children:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    student_id:
+                      type: string
+                      format: uuid
+                    first_name:
+                      type: string
+                    last_name:
+                      type: string
+                    grade_level:
+                      type: string
+                    attendance:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/AttendanceDetail'
+                    grades:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/GradeDetail'
+
+    AttendanceCreate:
+      type: object
+      required:
+        - course_id
+        - date
+        - records
+      properties:
+        course_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        records:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - student_id
+              - status
+            properties:
+              student_id:
+                type: string
+                format: uuid
+              status:
+                type: string
+                enum: [present, absent, late, excused]
+
+    AttendanceDetail:
+      type: object
+      properties:
+        attendance_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [present, absent, late, excused]
+        marked_by:
+          type: string
+          format: uuid
+
+    AttendanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        attendance:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendanceDetail'
+        message:
+          type: string
+
+    GradeCreate:
+      type: object
+      required:
+        - student_id
+        - course_id
+        - grade_value
+        - date_assigned
+        - date_due
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        grade_value:
+          type: number
+          minimum: 0
+          maximum: 100
+        assignment_type:
+          type: string
+          enum: [quiz, test, homework, final]
+        date_assigned:
+          type: string
+          format: date
+        date_due:
+          type: string
+          format: date
+
+    GradeDetail:
+      type: object
+      properties:
+        grade_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        grade_value:
+          type: number
+        assignment_type:
+          type: string
+        date_assigned:
+          type: string
+          format: date
+        date_due:
+          type: string
+          format: date
+        date_graded:
+          type: string
+          format: date
+
+    GradeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        grade:
+          $ref: '#/components/schemas/GradeDetail'
+        message:
+          type: string
