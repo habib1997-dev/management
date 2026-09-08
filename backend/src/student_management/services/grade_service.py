@@ -12,6 +12,7 @@ from student_management.services.attendance_service import get_student_or_404
 from student_management.services.course_service import get_course_or_404
 
 STUDENT_NOT_IN_COURSE = "Student is not assigned to this course"
+STUDENT_INACTIVE = "Student is deactivated"
 
 
 def record_grade(
@@ -27,6 +28,10 @@ def record_grade(
     if student is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Student not found"
+        )
+    if not student.active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_INACTIVE
         )
 
     if student not in course.students:

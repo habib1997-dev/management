@@ -11,6 +11,7 @@ from student_management.schemas.attendance import AttendanceCreate
 
 STUDENT_MISSING = "One or more students not found"
 STUDENT_NOT_IN_COURSE = "One or more students are not assigned to this course"
+STUDENT_INACTIVE = "One or more students are deactivated"
 DUPLICATE_STUDENT = "Duplicate student entries are not allowed"
 
 
@@ -31,9 +32,14 @@ def mark_attendance(
 
     roster = {s.student_id for s in course.students}
     for record in payload.records:
-        if db.get(Student, record.student_id) is None:
+        student = db.get(Student, record.student_id)
+        if student is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_MISSING
+            )
+        if not student.active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_INACTIVE
             )
         if record.student_id not in roster:
             raise HTTPException(

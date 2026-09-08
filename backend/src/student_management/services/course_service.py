@@ -23,13 +23,23 @@ def get_course_or_404(db: Session, course_id) -> Course:
     return course
 
 
-def create_course(db: Session, payload: CourseCreate) -> Course:
-    teacher = db.get(Teacher, payload.teacher_id)
+def _validate_teacher(db: Session, teacher_id) -> Teacher:
+    teacher = db.get(Teacher, teacher_id)
     if teacher is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Teacher not found",
         )
+    if not teacher.status:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot assign an inactive teacher",
+        )
+    return teacher
+
+
+def create_course(db: Session, payload: CourseCreate) -> Course:
+    _validate_teacher(db, payload.teacher_id)
     course = Course(
         name=payload.name.strip(),
         teacher_id=payload.teacher_id,
@@ -71,6 +81,8 @@ def get_course_with_reads(db: Session, course_id) -> Course:
 
 def update_course(db: Session, course: Course, payload: CourseUpdate) -> Course:
     data = payload.model_dump(exclude_unset=True)
+    if "teacher_id" in data and data["teacher_id"] is not None:
+        _validate_teacher(db, data["teacher_id"])
     for field, value in data.items():
         if value is not None:
             setattr(course, field, value)
@@ -91,7 +103,15 @@ def list_course_students(db: Session, course_id) -> list[Student]:
 
 
 def assign_course_students(db: Session, course: Course, student_ids: list) -> Course:
-    """Replace the course roster (link students to the course)."""
+    """Replace the course roster (link students to the course).
+
+    Enforces the course's max_students capacity.
+    """
+    if course.max_students is not None and len(student_ids) > course.max_students:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Course capacity exceeded (max {course.max_students})",
+        )
     students = []
     for sid in student_ids:
         try:

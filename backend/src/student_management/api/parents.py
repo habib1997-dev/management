@@ -14,7 +14,9 @@ from student_management.schemas.parent import (
     ParentListResponse,
     ParentPortal,
     ParentResponse,
+    ParentStudentsUpdate,
     ParentSummary,
+    ParentUpdate,
     PortalChild,
     PortalParent,
 )
@@ -52,6 +54,22 @@ def create_parent(
     )
 
 
+@router.put("/parents/{parent_id}", response_model=ParentResponse)
+def update_parent(
+    parent_id: str,
+    payload: ParentUpdate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(admin_only),
+) -> ParentResponse:
+    """Update a parent's profile and/or active status (admin-only). Follows their login too."""
+    parent = parent_service.get_parent_or_404(db, parent_id)
+    parent = parent_service.update_parent(db, parent, payload)
+    return ParentResponse(
+        parent=ParentSummary.model_validate(parent),
+        message="Parent successfully updated",
+    )
+
+
 @router.get("/parents/{parent_id}/students", response_model=dict)
 def list_parent_students(
     parent_id: str,
@@ -62,6 +80,23 @@ def list_parent_students(
     return {
         "data": [StudentSummary.model_validate(s) for s in students],
         "meta": {"total": len(students)},
+    }
+
+
+@router.put("/parents/{parent_id}/students", response_model=dict)
+def update_parent_students(
+    parent_id: str,
+    payload: ParentStudentsUpdate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(admin_only),
+) -> dict:
+    """Replace the students linked to this parent (admin-only)."""
+    parent = parent_service.get_parent_or_404(db, parent_id)
+    parent = parent_service.update_parent_students(db, parent, payload.student_ids)
+    return {
+        "data": [StudentSummary.model_validate(s) for s in parent.students],
+        "meta": {"total": len(parent.students)},
+        "message": "Parent's students updated",
     }
 
 
@@ -88,6 +123,11 @@ def get_parent_portal(
     user: User = Depends(parent_only),
 ) -> ParentPortal:
     parent = parent_service.get_parent_with_children(db, parent_id)
+    if not parent.status:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Parent account is deactivated",
+        )
     if user.parent_id is None or user.parent_id != parent.parent_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

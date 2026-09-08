@@ -318,6 +318,41 @@ The `password` field is **optional**. If provided, a login account is created fo
 
 **List parents**: `GET /api/v1/parents`
 **List a parent's students**: `GET /api/v1/parents/{parent_id}/students`
+**List a student's parents**: `GET /api/v1/students/{student_id}/parents` (admin-only)
+**Change a parent's children later** (admin-only): `PUT /api/v1/parents/{parent_id}/students` with `{"student_ids": [...]}` — replaces the linked children (e.g. a second child joins the school).
+
+### Account management (admin)
+
+Admins can see all login accounts, disable a login (e.g. a teacher who left the school), or reset a forgotten password:
+
+**List accounts**: `GET /api/v1/administrators/users`
+
+**Update an account**: `PUT /api/v1/administrators/users/{user_id}`
+
+```json
+{ "active": false }            // disable this login
+{ "active": true }             // re-enable it
+{ "password": "newpass123" }   // reset the password
+```
+
+Note: courses enforce their `max_students` size on roster assignment — assigning more students than the limit returns a "Course capacity exceeded" error.
+
+### Remove someone (deactivate / restore)
+
+No data is ever permanently erased — records are **soft-deleted** so history (courses, grades, attendance) stays intact. Set the record's flag to `false` to deactivate; it also disables the person's login. Set it back to `true` to restore.
+
+In the website, each screen has an **Edit** button whose panel lets an admin fix mistakes **and** toggle "Account active" in one place (un-tick to deactivate). Behind the scenes:
+
+**Edit a teacher** (admin-only): `PUT /api/v1/teachers/{teacher_id}` — optional `name`, `email`, `subjects_taught`, `status`
+**Edit a parent** (admin-only): `PUT /api/v1/parents/{parent_id}` — optional `name`, `email`, `phone`, `status` (use `PUT /parents/{id}/students` separately to change linked children)
+**Edit/deactivate a student** (admin-only): `PUT /api/v1/students/{student_id}` — optional `name`, `email`, `phone`, `active`
+
+Only provided fields change. A second parent/teacher with the same email is rejected (400), and email/phone are format-checked.
+
+What being deactivated means:
+- Teacher: can't be assigned to new courses ("Cannot assign an inactive teacher"), login disabled.
+- Parent: portal access refused ("Parent account is deactivated"), login disabled.
+- Student: can't receive new attendance marks or grades ("Student is deactivated").
 
 ### Parent Portal (parent)
 

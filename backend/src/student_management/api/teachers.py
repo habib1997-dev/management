@@ -14,6 +14,7 @@ from student_management.schemas.teacher import (
     TeacherListResponse,
     TeacherResponse,
     TeacherSummary,
+    TeacherUpdate,
 )
 from student_management.services import account_service, teacher_service
 
@@ -44,6 +45,22 @@ def create_teacher(
     return TeacherResponse(
         teacher=TeacherDetail.model_validate(teacher),
         message="Teacher successfully created",
+    )
+
+
+@router.put("/teachers/{teacher_id}", response_model=TeacherResponse)
+def update_teacher(
+    teacher_id: str,
+    payload: TeacherUpdate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(admin_only),
+) -> TeacherResponse:
+    """Update a teacher's profile and/or active status (admin-only). Follows their login too."""
+    teacher = teacher_service.get_teacher_or_404(db, teacher_id)
+    teacher = teacher_service.update_teacher(db, teacher, payload)
+    return TeacherResponse(
+        teacher=TeacherDetail.model_validate(teacher),
+        message="Teacher successfully updated",
     )
 
 

@@ -102,7 +102,110 @@ def test_create_parent_rejects_missing_student(client, make_auth_headers):
     assert "student" in resp.json()["detail"].lower()
 
 
+# ---------------- Edit parent's students ----------------
+
+def make_parent_with_student(client, headers, **overrides):
+    sid = make_student(client, headers)
+    resp = make_parent(client, headers, student_ids=[sid], **overrides)
+    assert resp.status_code == 201
+    return resp.json()["parent"]["parent_id"], sid
+
+
+def test_update_parent_students(client, make_auth_headers):
+    headers = make_auth_headers()
+    pid, _old = make_parent_with_student(client, headers)
+
+    new1 = make_student(client, headers, first="Bob", last="New")
+    new2 = make_student(client, headers, first="Eve", last="New")
+
+    resp = client.put(
+        f"/api/v1/parents/{pid}/students",
+        json={"student_ids": [new1, new2]},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert {s["student_id"] for s in resp.json()["data"]} == {new1, new2}
+
+    children = client.get(f"/api/v1/parents/{pid}/students", headers=headers)
+    assert {s["student_id"] for s in children.json()["data"]} == {new1, new2}
+
+    # Replacing clears the previous set entirely
+    resp2 = client.put(
+        f"/api/v1/parents/{pid}/students",
+        json={"student_ids": [new1]},
+        headers=headers,
+    )
+    assert resp2.status_code == 200
+    children2 = client.get(f"/api/v1/parents/{pid}/students", headers=headers)
+    assert [s["student_id"] for s in children2.json()["data"]] == [new1]
+
+
+def test_update_parent_students_validation(client, make_auth_headers):
+    headers = make_auth_headers()
+    pid, _sid = make_parent_with_student(client, headers)
+
+    missing = client.put(
+        f"/api/v1/parents/{pid}/students",
+        json={"student_ids": ["00000000-0000-0000-0000-000000000000"]},
+        headers=headers,
+    )
+    assert missing.status_code == 400
+    assert "student" in missing.json()["detail"].lower()
+
+    malformed = client.put(
+        f"/api/v1/parents/{pid}/students",
+        json={"student_ids": ["not-a-uuid"]},
+        headers=headers,
+    )
+    assert malformed.status_code == 422
+
+    unknown_parent = client.put(
+        "/api/v1/parents/00000000-0000-0000-0000-000000000000/students",
+        json={"student_ids": []},
+        headers=headers,
+    )
+    assert unknown_parent.status_code == 404
+
+
+def test_update_parent_students_admin_only(client, make_auth_headers):
+    headers = make_auth_headers()
+    pid, _sid = make_parent_with_student(client, headers)
+
+    teacher_headers = make_auth_headers(role="teacher")
+    parent_headers = make_auth_headers(role="parent")
+
+    body = {"student_ids": []}
+    assert client.put(f"/api/v1/parents/{pid}/students", json=body, headers=teacher_headers).status_code == 403
+    assert client.put(f"/api/v1/parents/{pid}/students", json=body, headers=parent_headers).status_code == 403
+    assert client.put(f"/api/v1/parents/{pid}/students", json=body).status_code == 401
+
+
 # ---------------- List parents ----------------
+
+
+def test_list_student_parents(client, make_auth_headers):
+    headers = make_auth_headers()
+    sid1 = make_student(client, headers, first="Daisy", last="Rose")
+    sid2 = make_student(client, headers, first="Lily", last="Rose")
+    p1 = make_parent(client, headers, email="p1.rose@family.net", student_ids=[sid1])
+    p2 = make_parent(client, headers, email="p2.rose@family.net", student_ids=[sid2])
+
+    resp = client.get(f"/api/v1/students/{sid1}/parents", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert [p["parent_id"] for p in data] == [p1.json()["parent"]["parent_id"]]
+
+    shared = client.get(f"/api/v1/students/{sid2}/parents", headers=headers)
+    assert {p["parent_id"] for p in shared.json()["data"]} == {p2.json()["parent"]["parent_id"]}
+
+    missing = client.get(
+        "/api/v1/students/00000000-0000-0000-0000-000000000000/parents", headers=headers
+    )
+    assert missing.status_code == 404
+
+    assert client.get(f"/api/v1/students/{sid1}/parents").status_code == 401
+    teacher_headers = make_auth_headers(role="teacher")
+    assert client.get(f"/api/v1/students/{sid1}/parents", headers=teacher_headers).status_code == 403
 
 
 def test_list_parents_shape(client, make_auth_headers):

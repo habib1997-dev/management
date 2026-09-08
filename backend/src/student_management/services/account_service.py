@@ -64,3 +64,33 @@ def create_parent_account(db: Session, parent_id, password: str) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def get_user_or_404(db: Session, user_id) -> User:
+    try:
+        user = db.get(User, uuid.UUID(str(user_id).strip()))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    return user
+
+
+def list_users(db: Session) -> list[User]:
+    return db.query(User).order_by(User.email).all()
+
+
+def update_user_account(
+    db: Session, user: User, *, password: str | None = None, active: bool | None = None
+) -> User:
+    if password is not None:
+        user.password_hash = hash_password(password)
+    if active is not None:
+        user.active = active
+    db.commit()
+    db.refresh(user)
+    return user

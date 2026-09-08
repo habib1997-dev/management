@@ -30,6 +30,22 @@ class TeacherSummary(BaseModel):
     status: bool
 
 
+class TeacherUpdate(BaseModel):
+    """Admin can update a teacher's profile and/or active status."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    email: str | None = Field(default=None, max_length=200)
+    subjects_taught: str | None = Field(default=None, max_length=100)
+    status: bool | None = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return validate_email_lenient(value)
+
+
 class TeacherDetail(TeacherSummary):
     courses: list[CourseSummary] = []
 

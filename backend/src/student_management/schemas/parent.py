@@ -32,6 +32,35 @@ class ParentCreate(BaseModel):
         return value.strip()
 
 
+class ParentStudentsUpdate(BaseModel):
+    student_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class ParentUpdate(BaseModel):
+    """Admin can update a parent's profile and/or active status."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    email: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=50)
+    status: bool | None = None
+
+    @pydantic.field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return validate_email_lenient(value)
+
+    @pydantic.field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not re.fullmatch(PHONE_PATTERN, value):
+            raise ValueError("phone must be a valid phone number")
+        return value.strip()
+
+
 class ParentSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

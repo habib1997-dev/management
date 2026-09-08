@@ -275,6 +275,39 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+    put:
+      summary: Update a teacher's profile and/or deactivate-restore (admin-only)
+      operationId: updateTeacher
+      tags:
+        - teachers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: teacher_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeacherUpdate'
+      responses:
+        '200':
+          description: Teacher successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeacherResponse'
+        '404':
+          description: Teacher not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
 
   /api/v1/teachers/{teacher_id}/account:
     post:
@@ -609,6 +642,40 @@ paths:
         '403':
           description: Forbidden
 
+  /api/v1/students/{student_id}/parents:
+    get:
+      summary: List all parents linked to a student (admin-only)
+      operationId: listStudentParents
+      tags:
+        - students
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful response with linked parents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParentSummary'
+        '404':
+          description: Student not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
   /api/v1/grades:
     post:
       summary: Record a grade for a student in a course
@@ -763,6 +830,41 @@ paths:
         '403':
           description: Forbidden
 
+  /api/v1/parents/{parent_id}:
+    put:
+      summary: Update a parent's profile, children and/or deactivate-restore (admin-only)
+      operationId: updateParent
+      tags:
+        - parents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: parent_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParentUpdate'
+      responses:
+        '200':
+          description: Parent successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParentResponse'
+        '404':
+          description: Parent not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
   /api/v1/parents/{parent_id}/students:
     get:
       summary: List students linked to a parent
@@ -790,6 +892,46 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/StudentSummary'
+        '404':
+          description: Parent not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    put:
+      summary: Replace the students linked to a parent (admin-only)
+      operationId: updateParentStudents
+      tags:
+        - parents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: parent_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParentStudentsUpdate'
+      responses:
+        '200':
+          description: Parent's students updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentSummary'
+        '400':
+          description: One or more students not found
         '404':
           description: Parent not found
         '401':
@@ -913,6 +1055,66 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/AdminSummary'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - not an administrator
+
+  /api/v1/administrators/users:
+    get:
+      summary: List all login accounts (admin-only)
+      operationId: listUserAccounts
+      tags:
+        - administrators
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successful response with user account list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserAdminDetail'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - not an administrator
+
+  /api/v1/administrators/users/{user_id}:
+    put:
+      summary: Deactivate/reactivate a login or reset its password (admin-only)
+      operationId: updateUserAccount
+      tags:
+        - administrators
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserAdminUpdate'
+      responses:
+        '200':
+          description: User account updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAdminResponse'
+        '404':
+          description: User not found
         '401':
           description: Unauthorized
         '403':
@@ -1123,6 +1325,24 @@ components:
           maxLength: 128
           description: Optional. If provided, a login account is created for the teacher immediately.
 
+    TeacherUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        subjects_taught:
+          type: string
+          maxLength: 100
+        status:
+          type: boolean
+          description: Set false to deactivate the teacher (and their login), true to restore
+      description: All fields optional — only provided fields are updated.
+
     TeacherResponse:
       type: object
       properties:
@@ -1268,6 +1488,69 @@ components:
           minLength: 8
           maxLength: 128
           description: Optional. If provided, a login account is created for the parent immediately.
+
+    ParentStudentsUpdate:
+      type: object
+      properties:
+        student_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Replacement list of students linked to this parent
+
+    ParentUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        phone:
+          type: string
+          maxLength: 50
+        status:
+          type: boolean
+          description: Set false to deactivate the parent (and their login), true to restore
+      description: All fields optional — only provided fields are updated.
+
+    UserAdminDetail:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        role:
+          type: string
+        active:
+          type: boolean
+
+    UserAdminUpdate:
+      type: object
+      properties:
+        active:
+          type: boolean
+          description: Set false to disable the login, true to re-enable
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: New password to reset the login to
+
+    UserAdminResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/UserAdminDetail'
+        message:
+          type: string
 
     AccountCreate:
       type: object

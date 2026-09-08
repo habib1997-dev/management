@@ -259,6 +259,30 @@ def test_course_management_admin_only(client, make_auth_headers):
     ).status_code == 403
 
 
+def test_course_students_enforce_max_capacity(client, make_auth_headers):
+    headers = make_auth_headers()
+    tid = make_teacher(client, headers).json()["teacher"]["teacher_id"]
+    cid = make_course(client, headers, tid, max_students=2).json()["course"]["course_id"]
+    sids = [create_student_for_course(client, headers) for _ in range(3)]
+
+    assign = client.put(
+        f"/api/v1/courses/{cid}/students",
+        json={"student_ids": sids},
+        headers=headers,
+    )
+    assert assign.status_code == 400
+    assert "capacity" in assign.json()["detail"].lower()
+
+    # Exactly at capacity is allowed
+    ok = client.put(
+        f"/api/v1/courses/{cid}/students",
+        json={"student_ids": sids[:2]},
+        headers=headers,
+    )
+    assert ok.status_code == 200
+    assert ok.json()["max_students"] == 2
+
+
 def test_course_students_assign_and_list(client, make_auth_headers):
     headers = make_auth_headers()
     tid = make_teacher(client, headers).json()["teacher"]["teacher_id"]

@@ -3,7 +3,11 @@
 **Updated**: 2026-09-08
 **Branch**: `001-student-management`
 **Feature**: 001-student-management (Student Management System)
-**Last Action**: Phase D PDF report cards complete (T046–T049) — 90 tests green, ruff clean
+**Last Action**: "Edit" panels replace Deactivate buttons — Teachers, Students, Parents each get one
+Edit button whose panel pre-fills the profile and includes an "Account active" checkbox (folded-in
+deactivate/restore); Parents' panel also edits linked children. Backend PUT endpoints extended to
+accept the profile fields. **119 tests green, ruff clean.** Next: teacher screens, parent portal,
+report PDF button (T054/T055/T057/T058).
 
 ## Context / Goal
 
@@ -45,7 +49,9 @@ courses, parents/parent portal, PDF report cards, React frontend. Working throug
 - **YAML edit gotcha**: the `edit` tool matches substrings — a `CourseResponse:` oldString without
   leading spaces stripped indentation from `    CourseResponse:`. When editing indentation-sensitive
   files (openapi.yaml), match whole lines with full indent, or use a python one-liner.
-- Git: no commits yet on `001-student-management` (T063 plans the first commit).
+- Git: first commit **e4598f5** made 2026-09-08 ("Phases A-D" backend). Do NOT amend — new commits only.
+- Windows npm gotcha: `npm`/`npm.ps1` is blocked by PowerShell execution policy → invoke `npm.cmd`
+  (or `cmd /c npm ...`). Node v24.15.0 installed.
 
 ## Work State
 
@@ -92,11 +98,83 @@ courses, parents/parent portal, PDF report cards, React frontend. Working throug
   import-sort issues in `backend/alembic/` so the root `ruff check .` gate is green).
 
 ### Active / Next
-- **Phase D — PDF report cards (T046–T049) DONE (2026-09-08)**: `report_service.py` (ReportLab),
-  `GET /api/v1/reports/{student_id}` → `application/pdf`. Course rows ordered A-Z by NAME in the report
-  (because `grade_level` free text sorts "10" before "2"); a real academic order would need a future
-  numeric sort field on courses. **90 tests pass, ruff clean.**
+- **Backend housekeeping (2026-09-08, committed as e4598f5)** — all fixes verified:
+  - First-ever git commit (root `.gitignore` added; dev DB `.db` files excluded).
+  - **Edit parent's children** (USER-APPROVED): `PUT /api/v1/parents/{parent_id}/students`
+    (admin-only, body `{"student_ids": [...]}`, swap pattern like course roster). 400
+    "One or more students not found" w/ message listing ids; 404 unknown parent.
+  - **Course capacity**: `assign_course_students()` → 400 "Course capacity exceeded (max N)"
+    when the roster swap exceeds `max_students` (None = unlimited).
+  - **Admin account management**: `GET /api/v1/administrators/users`
+    (`{"data":[UserAdminDetail], "meta":{"total":n}}`) and
+    `PUT /api/v1/administrators/users/{user_id}` (`{"active": bool?, "password": str?}` min 8;
+    404 unknown user; message "User account updated"). `UserAdminUpdate/Detail/Response`
+    (`from_attributes=True`). Admin-only via existing role guard.
+  - **Student → parents lookup**: `GET /api/v1/students/{student_id}/parents` (admin-only).
+  - Full suite **100 passed, ruff clean**. openapi.yaml + quickstart.md updated
+    (PUT parent-students, administrators/users, students/{id}/parents + 4 new schemas).
 - Next: React frontend (T050+), then Phase F final checks.
+
+### Phase E — React frontend (2026-09-08, admin screens done)
+- Scaffold in `frontend/`: Vite 5 + React 18 + react-router-dom 6, `src/api.js` JWT fetch wrapper
+  (auto 401→logout redirect), `src/auth.jsx` AuthContext (token+role in localStorage), vite proxy
+  `/api` → `http://localhost:8000` (dev only). Files: `App.jsx` (routes), `components/RequireAuth.jsx`,
+  `components/Layout.jsx` (role-based sidebar), `styles.css`.
+- **T051 Login**: all 3 roles; redirects admin→/students, teacher/parent→home. Demo hint on page.
+- **T052 Students**: search + grade-level + active filters (debounced 250ms), enroll form (dob/grade
+  editable, email/phone optional), inline edit (name/email/phone/active).
+- **T053 Teachers + Courses**: teacher create (optional password → login account); course create
+  (teacher dropdown from /teachers, max_students); course Roster panel — checkbox roster saved via
+  `PUT /courses/{id}/students`, teacher reassign via `PUT /courses/{id}`; capacity error surfaces.
+- **T056 Parents**: parent create (optional password, checkbox children); per-row children count;
+  Children panel saves via `PUT /parents/{id}/students`; student → multiple parents supported.
+- Verification: `npm.cmd run build` passes (186 kB JS / 3.5 kB CSS); live test through the Vite
+  proxy — login as admin, then students/teachers/courses/parents all returned data (backend dev
+  server already running on :8000). `npm.cmd` (not `npm`) required on Windows (PS execution policy).
+- Remaining Phase E: T054 teacher attendance screen, T055 teacher grades screen, T057 parent portal,
+  T058 report-card PDF download button. Then Phase F (T059–T063).
+- NOTE: backend housekeeping changes (parents/administrators/account/course_service etc.) are still
+  uncommitted after commit e4598f5 — commit them before Phase F close.
+
+### Soft-delete / Deactivate (2026-09-08) — "Remove" is now possible
+- **User decision**: soft-delete (records never erased) + deactivation blocks access too.
+- **Backend**: `PUT /teachers/{id}` + `PUT /parents/{id}` with `{"status": bool}` (admin-only;
+  `TeacherUpdate`/`ParentUpdate` schemas). Services flip the flag AND sync the linked `users.active`
+  so the login dies/returns with the record. Students reuse existing `PUT /students/{id} {active}`.
+- **Guards**: course create/reassign refuses inactive teacher (400 "Cannot assign an inactive
+  teacher"); parent portal refuses deactivated parent (403 "Parent account is deactivated",
+  defense-in-depth — login is already blocked via users.active → 401); attendance & grades refuse
+  inactive students (400 "Student is deactivated").
+- **Frontend**: Deactivate/Restore button on every row of Students/Teachers/Parents; student-name
+  search box above the Linked-children picker (Add-parent form + Children panel) and the course
+  Roster panel (pickers show active students only); teacher dropdowns hide inactive teachers.
+- **Tests**: `tests/contract/test_deactivate.py` — 10 contract tests (toggle+login-sync, RBAC,
+  404s, all four guard cases). Full suite **110 passed, ruff clean**, `npm run build` OK, live
+  PUT through the Vite proxy returns 200 (backend auto-reloaded the new routes).
+- Docs: openapi.yaml (PUT teacher/parent + TeacherUpdate/ParentUpdate schemas, 25 paths),
+  quickstart.md ("Remove someone" section), tasks.md + AGENTS.md note added.
+
+### "Edit" panels replace Deactivate (2026-09-08, build session)
+- **Reason**: user spotted that a typo in a name/email/phone could never be fixed, and the
+  "Children" button label was misleading for what is really "edit this parent". Chose **Option B**:
+  each screen has ONE Edit button; deactivate/restore lives inside the panel as an "Account active"
+  checkbox.
+- **Backend**: `TeacherUpdate` gains `name/email/subjects_taught`; `ParentUpdate` gains
+  `name/email/phone` (both keep `status`, all optional = partial update). Replaced
+  `update_teacher_status`/`update_parent_status` with `update_teacher`/`update_parent`: duplicate
+  email check excluding self (400), email lowercased/normalized, phone validated, subjects_taught
+  can be cleared to null; status still syncs the linked `users.active`. Endpoints unchanged
+  (`PUT /teachers/{id}`, `PUT /parents/{id}`) — only richer bodies.
+- **Frontend**: Parents row button Children → Edit, panel = Name/Email/Phone + "Account active ✓" +
+  Linked-children (searchable) → Save sends the profile PUT + the `/students` PUT. Teachers gained
+  an Edit panel (Name/Email/Subjects + active ✓) → one PUT. Students' existing Edit panel gained an
+  "Account active" checkbox (works via existing `active` field). Standalone Deactivate/Restore
+  buttons removed from all three screens.
+- **Tests**: `tests/contract/test_profile_edit.py` — 9 tests (profile edits, partial, dup-email 400,
+  bad format 422, combined status+fields, login blocked when deactivated in same call). Full suite
+  **119 passed, ruff clean**, `npm run build` OK.
+- Docs: openapi.yaml (TeacherUpdate/ParentUpdate expanded, PUT summaries updated), quickstart.md
+  ("Remove someone" reworded to "Edit"), tasks.md + AGENTS.md note.
 
 ### Login-accounts + US8 Parent Portal (2026-09-08)
 - User chose **FLEXIBLE passwords**: optional at creation, retro-active endpoint for existing records.
@@ -180,8 +258,33 @@ courses, parents/parent portal, PDF report cards, React frontend. Working throug
   CREATION time — there is no "edit parent's children later" endpoint. Proposed a new admin-only
   `PUT /api/v1/parents/{parent_id}/students` (`{"student_ids": [...]}`) + tests + docs (swap/create
   pattern like `PUT /courses/{id}/students`). User has not yet said yes. Do NOT build until confirmed.
-- Status at close of this conversation: **90 tests pass, ruff clean.** Phase D PDF reports (T046–T049)
-  complete: report cards order courses A-Z by name; grade_level stays free text.
+
+### Conversation Log (2026-09-08, backend housekeeping build session)
+
+- **User approved the parent-children edit**: `PUT /api/v1/parents/{parent_id}/students` BUILT
+  (see Active/Next). Also built admin account management (deactivate/reset-password), enforced
+  course `max_students`, and added `GET /students/{id}/parents`.
+- **First git commit created**: `e4598f5` — the whole Phase A–D backend (115 files). Root
+  `.gitignore` added so dev DB (`*.db`), `__pycache__`, `.env`, `node_modules/` are never committed.
+- Status at close: **100 tests pass, ruff clean.** Docs (openapi.yaml + quickstart.md) refreshed.
+  Next conversational step: scaffold the React frontend (Vite) — login screen, app shell with
+  role-based menu, then admin screens (students, teachers, courses, parents). Use `npm.cmd`.
+
+### Conversation Log (2026-09-08, "how do I remove people" + soft-delete session)
+
+- **Q: "is there any way to remove teacher, student or parent?"** — Answered: no real delete exists
+  (students have a dormant `active` flag, teacher/parent only the login can be disabled). Explained
+  why hard-delete is unsafe (FKs to courses/attendance/grades; schools need history) → proposed
+  soft-delete.
+- **Q: user asked for a senior-dev recommendation** — Picked: soft-delete AND deactivation blocks
+  access (login off, inactive teacher unassignable, gates on portal/attendance/grades).
+- **Clarified the UI concepts in plain English**: "Linked children" = tick which enrolled students
+  are this parent's child(ren); the "Roster" button = set which students are in a course (class).
+- **User insight**: with 200–300 students, checkbox lists are unmanageable → added a **student-name
+  search box** above every picker (Linked-children in Add-parent + Children panel, and course
+  Roster). Confirmed the search sits INSIDE the same section.
+- Everything requested, incl. the search box, is now BUILT (see "Soft-delete / Deactivate"). **110 tests
+  pass, ruff clean, npm build OK.** Frontend live on Vite proxy.
 
 ## Relevant Files (absolute)
 - `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\main.py` — app + lifespan + routers
@@ -190,7 +293,8 @@ courses, parents/parent portal, PDF report cards, React frontend. Working throug
 - `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\services\{student_service,teacher_service,course_service,attendance_service,grade_service,parent_service,account_service,report_service}.py`
 - `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\models\` — student, teacher, course, enums (statuses/roles; GradeLevel enum removed)
 - `C:\Users\Naqeeb\Desktop\management\tests\conftest.py` — db/client/make_auth_headers fixtures
-- `C:\Users\Naqeeb\Desktop\management\tests\contract\test_{students,teachers_courses,attendance,grades,parents,accounts,portal,reports}.py`, `tests\integration\test_*_flow.py`
+- `C:\Users\Naqeeb\Desktop\management\tests\contract\test_{students,teachers_courses,attendance,grades,parents,accounts,portal,reports,deactivate}.py`, `tests\integration\test_*_flow.py`
+- `C:\Users\Naqeeb\Desktop\management\frontend\src\` — Vite+React app: `main.jsx`, `App.jsx`, `api.js`, `auth.jsx`, `styles.css`; `components/{RequireAuth,Layout}.jsx`; `pages/{Login,Dashboard,Students,Teachers,Courses,Parents}.jsx`
 - `C:\Users\Naqeeb\Desktop\management\specs\001-student-management\tasks.md` — task status (T001–T049 done)
 - `C:\Users\Naqeeb\Desktop\management\specs\001-student-management\contracts\openapi.yaml` — teachers/courses/attendance/grades/parents/portal/reports documented
 - `C:\Users\Naqeeb\Desktop\management\backend\scripts\seed.py` — demo credentials + data

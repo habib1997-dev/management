@@ -2,6 +2,9 @@
 
 from copy import deepcopy
 
+import student_management.models  # noqa: F401
+from student_management.models import User
+
 VALID_TEACHER = {
     "name": "Nadia Rahman",
     "email": "nadia.accounts@schoolsystem.com",
@@ -17,6 +20,12 @@ VALID_PARENT = {
 
 def login(client, email, password):
     return client.post("/api/v1/auth/login", json={"email": email, "password": password})
+
+
+def make_user(db_session, email, role="admin"):
+    user = db_session.query(User).filter(User.email == email).first()
+    assert user is not None
+    return user
 
 
 def test_create_teacher_with_password_creates_login(client, db_session, make_auth_headers):
@@ -129,4 +138,105 @@ def test_account_endpoints_admin_only(client, make_auth_headers):
             json={"password": "teacherpw123"},
         ).status_code
         == 401
+    )
+
+
+# ---------------- Admin account management (list / deactivate / reset) ----------------
+
+
+def test_list_user_accounts(client, db_session, make_auth_headers):
+    headers = make_auth_headers()
+    make_user(db_session, "admin@test.edu")  # default admin from fixture
+    client.post(
+        "/api/v1/teachers", json=deepcopy(VALID_TEACHER) | {"password": "teacherpw123"}, headers=headers
+    )
+
+    resp = client.get("/api/v1/administrators/users", headers=headers)
+    assert resp.status_code == 200
+    emails = {u["email"] for u in resp.json()["data"]}
+    assert VALID_TEACHER["email"] in emails
+    assert "admin@test.edu" in emails
+    admin_row = next(u for u in resp.json()["data"] if u["email"] == VALID_TEACHER["email"])
+    assert set(admin_row.keys()) == {"user_id", "email", "role", "active"}
+    assert admin_row["role"] == "teacher"
+    assert admin_row["active"] is True
+
+
+def test_admin_resets_password(client, db_session, make_auth_headers):
+    headers = make_auth_headers()
+    client.post(
+        "/api/v1/teachers", json=deepcopy(VALID_TEACHER) | {"password": "firstpw123"}, headers=headers
+    )
+    user_id = str(make_user(db_session, VALID_TEACHER["email"]).user_id)
+
+    reset = client.put(
+        f"/api/v1/administrators/users/{user_id}",
+        json={"password": "newpw456"},
+        headers=headers,
+    )
+    assert reset.status_code == 200
+    assert reset.json()["success"] is True
+    assert login(client, VALID_TEACHER["email"], "firstpw123").status_code == 401
+    assert login(client, VALID_TEACHER["email"], "newpw456").status_code == 200
+
+
+def test_admin_deactivates_and_reactivates_login(client, db_session, make_auth_headers):
+    headers = make_auth_headers()
+    client.post(
+        "/api/v1/teachers", json=deepcopy(VALID_TEACHER) | {"password": "teacherpw123"}, headers=headers
+    )
+    user_id = str(make_user(db_session, VALID_TEACHER["email"]).user_id)
+
+    off = client.put(
+        f"/api/v1/administrators/users/{user_id}", json={"active": False}, headers=headers
+    )
+    assert off.status_code == 200
+    assert login(client, VALID_TEACHER["email"], "teacherpw123").status_code == 401
+
+    on = client.put(
+        f"/api/v1/administrators/users/{user_id}", json={"active": True}, headers=headers
+    )
+    assert on.status_code == 200
+    assert login(client, VALID_TEACHER["email"], "teacherpw123").status_code == 200
+
+
+def test_admin_update_user_errors(client, db_session, make_auth_headers):
+    headers = make_auth_headers()
+    missing = client.put(
+        "/api/v1/administrators/users/00000000-0000-0000-0000-000000000000",
+        json={"active": False},
+        headers=headers,
+    )
+    assert missing.status_code == 404
+
+    client.post(
+        "/api/v1/teachers", json=deepcopy(VALID_TEACHER) | {"password": "teacherpw123"}, headers=headers
+    )
+    user_id = str(make_user(db_session, VALID_TEACHER["email"]).user_id)
+    short = client.put(
+        f"/api/v1/administrators/users/{user_id}",
+        json={"password": "x"},
+        headers=headers,
+    )
+    assert short.status_code == 422
+
+    malformed = client.put(
+        "/api/v1/administrators/users/not-a-uuid",
+        json={"active": True},
+        headers=headers,
+    )
+    assert malformed.status_code == 404
+
+
+def test_admin_user_management_admin_only(client, db_session, make_auth_headers):
+    teacher_headers = make_auth_headers(role="teacher")
+    assert client.get("/api/v1/administrators/users", headers=teacher_headers).status_code == 403
+    assert client.get("/api/v1/administrators/users").status_code == 401
+    assert (
+        client.put(
+            "/api/v1/administrators/users/00000000-0000-0000-0000-000000000000",
+            json={"active": False},
+            headers=teacher_headers,
+        ).status_code
+        == 403
     )

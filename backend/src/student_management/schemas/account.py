@@ -2,7 +2,7 @@
 
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AccountCreate(BaseModel):
@@ -18,4 +18,24 @@ class AccountDetail(BaseModel):
 class AccountResponse(BaseModel):
     success: bool = True
     account: AccountDetail
+    message: str
+
+
+class UserAdminUpdate(BaseModel):
+    active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+
+class UserAdminDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: uuid.UUID
+    email: str
+    role: str
+    active: bool
+
+
+class UserAdminResponse(BaseModel):
+    success: bool = True
+    user: UserAdminDetail
     message: str

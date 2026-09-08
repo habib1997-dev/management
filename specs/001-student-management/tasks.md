@@ -12,6 +12,27 @@
 - Delivery: **MVP-first** (stop after student core for user review)
 - Student search: contract updated — `GET /api/v1/students?search=` added
 
+**Note (2026-09-08)**: All Phase A–D tasks (T001–T049) DONE and committed (git `e4598f5`).
+Backend housekeeping beyond the task list added in that commit: `PUT /parents/{id}/students`
+(edit children), course `max_students` enforcement, `GET/PUT /administrators/users`, and
+`GET /students/{id}/parents`. Openapi.yaml + quickstart.md document them. Remaining work is
+Phase E (React) + Phase F below.
+
+**Added 2026-09-08 (soft-delete / deactivate)**: `PUT /teachers/{id}` + `PUT /parents/{id}`
+(`{"status": bool}`, syncs the linked login) and guards — inactive teacher can't be assigned
+to courses (400), inactive parent denied portal (403), inactive student can't get new
+attendance/grades (400). Frontend: Deactivate/Restore buttons + student-name search in the
+Linked-children and course-roster pickers. `tests/contract/test_deactivate.py` (10 tests).
+**110 tests pass, ruff clean.**
+
+**Added 2026-09-08 (profile editing / "Edit" panels)**: the same PUT endpoints now accept the
+person's profile fields too — teachers `name/email/subjects_taught`, parents `name/email/phone`
+(optional, partial updates; duplicate-email 400; format-validated). Frontend: each screen
+(Students, Teachers, Parents) uses a single **Edit** button whose panel pre-fills the fields
+plus an "Account active" checkbox (deactivate/restore folded in — standalone Deactivate buttons
+removed). Parents' Edit panel also edits linked children. `tests/contract/test_profile_edit.py`
+(9 tests). **119 tests pass, ruff clean.**
+
 **Format**: `- [ ] [TaskID] [P?] [Story?] Description (Size/Blocked-by)`
 
 ---
@@ -104,13 +125,13 @@
 
 ## Phase E — React frontend
 
-- [ ] T050 [P] Frontend scaffold — `frontend/` (React + Vite, router, API client) (M, none)
-- [ ] T051 Login screen (all 3 roles) (M, T050)
-- [ ] T052 [P] Admin: student screens (list w/ search + enroll + edit) (M, T051)
-- [ ] T053 [P] Admin: teachers + courses screens (M, T051)
+- [x] T050 [P] Frontend scaffold — `frontend/` (React + Vite, router, API client) (M, none)
+- [x] T051 Login screen (all 3 roles) (M, T050)
+- [x] T052 [P] Admin: student screens (list w/ search + enroll + edit) (M, T051)
+- [x] T053 [P] Admin: teachers + courses screens (M, T051)
 - [ ] T054 [P] Teacher: attendance screen (M, T051)
 - [ ] T055 [P] Teacher: grades screen (M, T051)
-- [ ] T056 [P] Admin: parents screens (M, T051)
+- [x] T056 [P] Admin: parents screens (M, T051)
 - [ ] T057 Parent: portal page (child's grades, attendance, enrollment) (M, T051)
 - [ ] T058 Report-card PDF download button (S, T057)
 

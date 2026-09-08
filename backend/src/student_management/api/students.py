@@ -11,6 +11,7 @@ from student_management.schemas.enrollment import (
     EnrollmentDetail,
     EnrollmentResponse,
 )
+from student_management.schemas.parent import ParentSummary
 from student_management.schemas.student import (
     StudentDetail,
     StudentEnrollment,
@@ -18,7 +19,7 @@ from student_management.schemas.student import (
     StudentResponse,
     StudentUpdate,
 )
-from student_management.services import student_service
+from student_management.services import parent_service, student_service
 
 router = APIRouter(prefix="/api/v1", tags=["students"])
 
@@ -94,3 +95,17 @@ def create_enrollment(
         enrollment=EnrollmentDetail.model_validate(enrollment),
         message="Enrollment successfully created",
     )
+
+
+@router.get("/students/{student_id}/parents", response_model=dict)
+def list_student_parents(
+    student_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(admin_only),
+) -> dict:
+    """All parents linked to a student (admin-only)."""
+    parents = parent_service.list_student_parents(db, student_id)
+    return {
+        "data": [ParentSummary.model_validate(p) for p in parents],
+        "meta": {"total": len(parents)},
+    }
