@@ -8,7 +8,7 @@ function StatCard({ icon: Icon, label, value }) {
   return (
     <div className="stat-card">
       <span className="stat-icon">
-        <Icon size={22} strokeWidth={2.1} />
+        <Icon size={20} strokeWidth={2.1} />
       </span>
       <div>
         <div className="stat-num">{value}</div>
@@ -120,7 +120,7 @@ export default function Dashboard() {
                 Record who is present, absent, late, or excused.
               </p>
               <Link className="btn btn-primary" to="/attendance">
-                <CalendarCheck size={16} />
+                <CalendarCheck size={15} />
                 Open attendance
               </Link>
             </div>
@@ -130,7 +130,7 @@ export default function Dashboard() {
                 Record quizzes, tests, homework, and final grades.
               </p>
               <Link className="btn" to="/grades">
-                <ClipboardCheck size={16} />
+                <ClipboardCheck size={15} />
                 Open grades
               </Link>
             </div>
@@ -144,7 +144,7 @@ export default function Dashboard() {
               See attendance, grades, and download report cards.
             </p>
             <Link className="btn btn-primary" to="/portal">
-              <Baby size={16} />
+              <Baby size={15} />
               Open portal
             </Link>
             {children > 0 && (
@@ -168,7 +168,7 @@ export default function Dashboard() {
                   portal()
                 }}
               >
-                <FileDown size={16} />
+                <FileDown size={15} />
                 Download latest report card
               </button>
             )}

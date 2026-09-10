@@ -38,14 +38,14 @@ export default function Layout() {
         <nav>
           <span className="nav-section">Menu</span>
           <NavLink to="/" end>
-            <Home size={17} strokeWidth={2.2} />
+            <Home size={16} strokeWidth={2.2} />
             Home
           </NavLink>
           {items.map((item) => {
             const Icon = item.icon
             return (
               <NavLink key={item.to} to={item.to}>
-                <Icon size={17} strokeWidth={2.2} />
+                <Icon size={16} strokeWidth={2.2} />
                 {item.label}
               </NavLink>
             )
@@ -57,7 +57,7 @@ export default function Layout() {
             <span className="role-chip">{user?.role}</span>
           </div>
           <button className="btn btn-ghost" onClick={handleLogout}>
-            <LogOut size={16} />
+            <LogOut size={15} />
             Log out
           </button>
         </div>

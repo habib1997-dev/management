@@ -197,7 +197,7 @@ export default function Teachers() {
                   <td>{t.status ? <span className="pill pill-ok">Active</span> : <span className="pill pill-off">Inactive</span>}</td>
                   <td>
                     <button className="btn btn-ghost" onClick={() => startEdit(t)}>
-                      <Pencil size={14} />
+                      <Pencil size={13} />
                       Edit
                     </button>
                   </td>

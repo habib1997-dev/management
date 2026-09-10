@@ -352,11 +352,11 @@ export default function Grades() {
                     <td>{g.date_graded}</td>
                     <td>
                       <button className="btn btn-ghost" onClick={() => saveEdit(g)} disabled={busy || !editDraft?.grade_value}>
-                        <Save size={14} />
+                        <Save size={13} />
                         Save
                       </button>{' '}
                       <button className="btn btn-ghost" onClick={cancelEdit}>
-                        <X size={14} />
+                        <X size={13} />
                         Cancel
                       </button>
                     </td>
@@ -378,7 +378,7 @@ export default function Grades() {
                     <td>{g.date_graded}</td>
                     <td>
                       <button className="btn btn-ghost" onClick={() => startEdit(g)} disabled={busy}>
-                        <Pencil size={14} />
+                        <Pencil size={13} />
                         Edit
                       </button>
                     </td>

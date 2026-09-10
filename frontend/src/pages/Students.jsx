@@ -143,11 +143,11 @@ export default function Students() {
         <h1>Students</h1>
         <div className="row-actions">
           <button className="btn" onClick={() => exportCsv('/api/v1/export/students.csv', 'students.csv')}>
-            <Download size={15} />
+            <Download size={14} />
             Download students CSV
           </button>
           <button className="btn" onClick={() => exportCsv('/api/v1/export/grades.csv', 'grades.csv')}>
-            <Download size={15} />
+            <Download size={14} />
             Download grades CSV
           </button>
         </div>
@@ -273,7 +273,7 @@ export default function Students() {
                   <td>{s.phone || '—'}</td>
                   <td>
                     <button className="btn btn-ghost" onClick={() => startEdit(s)}>
-                      <Pencil size={14} />
+                      <Pencil size={13} />
                       Edit
                     </button>
                   </td>
@@ -286,7 +286,7 @@ export default function Students() {
         {total > PAGE_SIZE && (
           <div className="row pagination">
             <button className="btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading}>
-              <ChevronLeft size={15} />
+              <ChevronLeft size={14} />
               Prev
             </button>
             <span className="muted">
@@ -294,7 +294,7 @@ export default function Students() {
             </span>
             <button className="btn" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages || loading}>
               Next
-              <ChevronRight size={15} />
+              <ChevronRight size={14} />
             </button>
           </div>
         )}

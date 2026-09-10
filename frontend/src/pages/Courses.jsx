@@ -252,7 +252,7 @@ export default function Courses() {
                   <td>
                     <div className="name-cell">
                       <span className="cell-icon">
-                        <BookOpen size={16} />
+                        <BookOpen size={15} />
                       </span>
                       {c.name}
                     </div>
@@ -263,7 +263,7 @@ export default function Courses() {
                   <td>{coursePill(c.status)}</td>
                   <td>
                     <button className="btn btn-ghost" onClick={() => openDetail(c.course_id)}>
-                      <Users size={14} />
+                      <Users size={13} />
                       Roster
                     </button>
                   </td>
@@ -282,7 +282,7 @@ export default function Courses() {
               {detail.name} <span className="muted">— {detail.students.length} student(s)</span>
             </h2>
             <button className="btn" onClick={() => setDetail(null)}>
-              <X size={15} />
+              <X size={14} />
               Close
             </button>
           </div>
