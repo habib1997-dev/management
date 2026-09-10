@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../api.js'
+import { Download, Pencil, ChevronLeft, ChevronRight } from 'lucide-react'
+import { api, downloadFile } from '../api.js'
+import Avatar from '../components/Avatar.jsx'
 
 const EMPTY_FORM = {
   first_name: '',
@@ -11,11 +13,16 @@ const EMPTY_FORM = {
   active: true,
 }
 
+const PAGE_SIZE = 50
+
 export default function Students() {
   const [rows, setRows] = useState([])
   const [search, setSearch] = useState('')
   const [gradeLevel, setGradeLevel] = useState('')
   const [active, setActive] = useState('')
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -30,14 +37,22 @@ export default function Students() {
     if (search) params.set('search', search)
     if (gradeLevel) params.set('gradeLevel', gradeLevel)
     if (active !== '') params.set('active', active)
+    params.set('page', String(page))
+    params.set('pageSize', String(PAGE_SIZE))
     try {
       const data = await api(`/api/v1/students?${params.toString()}`)
       setRows(data.data || [])
+      setTotal(data.meta?.total || 0)
+      setTotalPages(Math.max(1, Math.ceil((data.meta?.total || 0) / PAGE_SIZE)))
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }, [search, gradeLevel, active, page])
+
+  useEffect(() => {
+    setPage(1)
   }, [search, gradeLevel, active])
 
   useEffect(() => {
@@ -73,16 +88,24 @@ export default function Students() {
     }
   }
 
-  function startEdit(s) {
+  async function startEdit(s) {
     setEditing(s)
+    setError('')
+    let detail = s
+    try {
+      const res = await api(`/api/v1/students/${s.student_id}`)
+      if (res && res.student_id) detail = res
+    } catch {
+      // fall back to the list row (date field will then be empty)
+    }
     setForm({
-      first_name: s.first_name,
-      last_name: s.last_name,
-      date_of_birth: s.date_of_birth ? s.date_of_birth.slice(0, 10) : '',
-      grade_level: s.grade_level,
-      email: s.email || '',
-      phone: s.phone || '',
-      active: s.active,
+      first_name: detail.first_name,
+      last_name: detail.last_name,
+      date_of_birth: detail.date_of_birth ? detail.date_of_birth.slice(0, 10) : '',
+      grade_level: detail.grade_level,
+      email: detail.email || '',
+      phone: detail.phone || '',
+      active: detail.active,
     })
   }
 
@@ -92,10 +115,9 @@ export default function Students() {
     setError('')
     try {
       const body = { ...form }
-      delete body.date_of_birth
-      delete body.grade_level
       if (!body.email) delete body.email
       if (!body.phone) delete body.phone
+      if (!body.date_of_birth) delete body.date_of_birth
       await api(`/api/v1/students/${editing.student_id}`, { method: 'PUT', body })
       setNotice('Student updated')
       resetForm()
@@ -107,9 +129,29 @@ export default function Students() {
     }
   }
 
+  async function exportCsv(path, filename) {
+    try {
+      await downloadFile(path, filename)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   return (
     <div>
-      <h1>Students</h1>
+      <div className="row space-between" style={{ marginTop: 0 }}>
+        <h1>Students</h1>
+        <div className="row-actions">
+          <button className="btn" onClick={() => exportCsv('/api/v1/export/students.csv', 'students.csv')}>
+            <Download size={15} />
+            Download students CSV
+          </button>
+          <button className="btn" onClick={() => exportCsv('/api/v1/export/grades.csv', 'grades.csv')}>
+            <Download size={15} />
+            Download grades CSV
+          </button>
+        </div>
+      </div>
       {notice && <div className="alert alert-ok">{notice}</div>}
       {error && <div className="alert alert-error">{error}</div>}
 
@@ -130,7 +172,6 @@ export default function Students() {
               type="date"
               value={form.date_of_birth}
               onChange={(e) => set('date_of_birth', e.target.value)}
-              disabled={Boolean(editing)}
               required
             />
           </label>
@@ -140,7 +181,6 @@ export default function Students() {
               value={form.grade_level}
               onChange={(e) => set('grade_level', e.target.value)}
               placeholder="e.g. 9, K, O-Level"
-              disabled={Boolean(editing)}
               required
             />
           </label>
@@ -193,33 +233,47 @@ export default function Students() {
             <option value="true">Active only</option>
             <option value="false">Inactive only</option>
           </select>
+          <span className="muted">
+            {total} student(s)
+          </span>
         </div>
         {loading ? (
           <p className="muted">Loading…</p>
         ) : rows.length === 0 ? (
           <p className="muted">No students found.</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Grade</th>
-                <th>Enrolled</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Grade</th>
+                  <th>Enrolled</th>
+                  <th>Status</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th />
+                </tr>
+              </thead>
             <tbody>
               {rows.map((s) => (
                 <tr key={s.student_id}>
                   <td>
-                    {s.first_name} {s.last_name}
+                    <div className="name-cell">
+                      <Avatar name={`${s.first_name} ${s.last_name}`} />
+                      {s.first_name} {s.last_name}
+                    </div>
                   </td>
                   <td>{s.grade_level}</td>
                   <td>{s.enrollment_date}</td>
-                  <td>{s.active ? 'Active' : 'Inactive'}</td>
+                  <td>
+                    {s.active ? <span className="pill pill-ok">Active</span> : <span className="pill pill-off">Inactive</span>}
+                  </td>
+                  <td>{s.email || '—'}</td>
+                  <td>{s.phone || '—'}</td>
                   <td>
                     <button className="btn btn-ghost" onClick={() => startEdit(s)}>
+                      <Pencil size={14} />
                       Edit
                     </button>
                   </td>
@@ -227,6 +281,22 @@ export default function Students() {
               ))}
             </tbody>
           </table>
+          </div>
+        )}
+        {total > PAGE_SIZE && (
+          <div className="row pagination">
+            <button className="btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading}>
+              <ChevronLeft size={15} />
+              Prev
+            </button>
+            <span className="muted">
+              Page {page} of {totalPages}
+            </span>
+            <button className="btn" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages || loading}>
+              Next
+              <ChevronRight size={15} />
+            </button>
+          </div>
         )}
       </div>
     </div>

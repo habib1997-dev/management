@@ -167,6 +167,19 @@ def test_update_parent_students_validation(client, make_auth_headers):
     assert unknown_parent.status_code == 404
 
 
+def test_update_parent_students_reject_duplicates(client, make_auth_headers):
+    headers = make_auth_headers()
+    pid, sid = make_parent_with_student(client, headers)
+
+    dup = client.put(
+        f"/api/v1/parents/{pid}/students",
+        json={"student_ids": [sid, sid]},
+        headers=headers,
+    )
+    assert dup.status_code == 400
+    assert "duplicate" in dup.json()["detail"].lower()
+
+
 def test_update_parent_students_admin_only(client, make_auth_headers):
     headers = make_auth_headers()
     pid, _sid = make_parent_with_student(client, headers)
@@ -206,6 +219,66 @@ def test_list_student_parents(client, make_auth_headers):
     assert client.get(f"/api/v1/students/{sid1}/parents").status_code == 401
     teacher_headers = make_auth_headers(role="teacher")
     assert client.get(f"/api/v1/students/{sid1}/parents", headers=teacher_headers).status_code == 403
+
+
+def test_teacher_can_view_parents_of_students_they_teach(client, make_auth_headers):
+    """A teacher reaches the guardians of their OWN students only."""
+    admin = make_auth_headers(role="admin")
+    tid = client.post(
+        "/api/v1/teachers",
+        json={"name": "Parent Access Teacher", "email": "pacc.t@schoolsystem.com", "subjects_taught": "Math"},
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    cid = client.post(
+        "/api/v1/courses",
+        json={"name": "Algebra", "teacher_id": tid, "grade_level": "9", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+    sid = client.post(
+        "/api/v1/students",
+        json={
+            "first_name": "Owned",
+            "last_name": "Child",
+            "date_of_birth": "2012-01-01",
+            "grade_level": "9",
+        },
+        headers=admin,
+    ).json()["student"]["student_id"]
+    pid = make_parent(client, admin, email="guardian@family.net", phone="555-777-0000", student_ids=[sid]).json()[
+        "parent"
+    ]["parent_id"]
+    client.put(f"/api/v1/courses/{cid}/students", json={"student_ids": [sid]}, headers=admin)
+
+    teacher = make_auth_headers(
+        email="pacc.t.teacher@schoolsystem.com", role="teacher", teacher_id=tid
+    )
+    resp = client.get(f"/api/v1/students/{sid}/parents", headers=teacher)
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert [p["parent_id"] for p in data] == [pid]
+    parent = data[0]
+    assert parent["name"] == "Maria Doe"
+    assert parent["email"] == "guardian@family.net"
+    assert parent["phone"] == "555-777-0000"
+
+    # A teacher who does NOT teach the student gets 403 (unknown+unauthorized alike).
+    other_tid = client.post(
+        "/api/v1/teachers",
+        json={"name": "Other Teacher", "email": "other.pacc.t@schoolsystem.com", "subjects_taught": "English"},
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    foreign = make_auth_headers(
+        email="other.pacc.t.teacher@schoolsystem.com", role="teacher", teacher_id=other_tid
+    )
+    assert client.get(f"/api/v1/students/{sid}/parents", headers=foreign).status_code == 403
+    unknown = client.get(
+        "/api/v1/students/00000000-0000-0000-0000-000000000000/parents", headers=teacher
+    )
+    assert unknown.status_code == 403
+
+    # Parents cannot look up other people's records.
+    parent_headers = make_auth_headers(role="parent")
+    assert client.get(f"/api/v1/students/{sid}/parents", headers=parent_headers).status_code == 403
 
 
 def test_list_parents_shape(client, make_auth_headers):

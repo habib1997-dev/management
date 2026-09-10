@@ -24,6 +24,25 @@ class GradeCreate(BaseModel):
         return self
 
 
+class GradeUpdate(BaseModel):
+    """Edits to an existing grade. Student and course are immutable identity."""
+
+    grade_value: float | None = Field(default=None, ge=0, le=100)
+    assignment_type: AssignmentType | None = None
+    date_assigned: date | None = None
+    date_due: date | None = None
+
+    @pydantic.model_validator(mode="after")
+    def validate_date_order(self) -> "GradeUpdate":
+        if (
+            self.date_assigned is not None
+            and self.date_due is not None
+            and self.date_due < self.date_assigned
+        ):
+            raise ValueError("date_due cannot be before date_assigned")
+        return self
+
+
 class GradeDetail(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

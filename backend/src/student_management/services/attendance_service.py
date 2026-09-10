@@ -101,14 +101,16 @@ def get_student_or_404(db: Session, student_id) -> Student:
     return student
 
 
-def list_student_attendance(db: Session, student_id) -> list[Attendance]:
+def list_student_attendance(
+    db: Session, student_id, course_ids: list[uuid.UUID] | None = None
+) -> list[Attendance]:
     get_student_or_404(db, student_id)
-    return (
-        db.query(Attendance)
-        .filter(Attendance.student_id == uuid.UUID(str(student_id)))
-        .order_by(Attendance.course_id, Attendance.date)
-        .all()
+    query = db.query(Attendance).filter(
+        Attendance.student_id == uuid.UUID(str(student_id))
     )
+    if course_ids:
+        query = query.filter(Attendance.course_id.in_(course_ids))
+    return query.order_by(Attendance.course_id, Attendance.date).all()
 
 
 def student_in_teacher_courses(db: Session, student_id, teacher_id) -> bool:

@@ -45,6 +45,9 @@ def get_current_user(
     user = db.get(User, uid)
     if user is None or not user.active:
         raise CREDENTIALS_ERROR
+    token_version = payload.get("auth_version", 0)
+    if token_version != user.auth_version:
+        raise CREDENTIALS_ERROR
     return user
 
 

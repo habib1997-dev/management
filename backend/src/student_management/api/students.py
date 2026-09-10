@@ -1,6 +1,6 @@
 """Student endpoints: enroll, list, search, view, update; and enrollments."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from student_management.api.deps import require_roles
@@ -27,6 +27,18 @@ admin_only = require_roles("admin")
 staff_only = require_roles("admin", "teacher")
 
 
+def _student_detail(detail: StudentDetail, *, redact_contact: bool) -> StudentDetail:
+    """Mask a student's personal contact info for non-admin roles.
+
+    Student email/phone are admin-only; teachers keep the profile but on a
+    need-to-know basis (names, grade level, dates) without contact details.
+    """
+    if redact_contact:
+        detail.email = None
+        detail.phone = None
+    return detail
+
+
 @router.post("/students", response_model=StudentResponse, status_code=201)
 def enroll_student(
     payload: StudentEnrollment,
@@ -43,18 +55,28 @@ def enroll_student(
 @router.get("/students", response_model=StudentListResponse)
 def list_students(
     db: Session = Depends(get_db),
-    _admin: User = Depends(staff_only),
+    user: User = Depends(staff_only),
     page: int = Query(1, ge=1),
     pageSize: int = Query(20, ge=1, le=100),
     search: str | None = None,
     gradeLevel: str | None = None,
     active: bool | None = None,
 ) -> StudentListResponse:
+    own_teacher_id = user.teacher_id if user.role == "teacher" else None
     items, total = student_service.list_students(
-        db, page=page, page_size=pageSize, search=search, grade_level=gradeLevel, active=active
+        db,
+        page=page,
+        page_size=pageSize,
+        search=search,
+        grade_level=gradeLevel,
+        active=active,
+        own_teacher_id=own_teacher_id,
     )
     return StudentListResponse(
-        data=[StudentDetail.model_validate(s) for s in items],
+        data=[
+            _student_detail(StudentDetail.model_validate(s), redact_contact=user.role != "admin")
+            for s in items
+        ],
         meta={"page": page, "pageSize": pageSize, "total": total},
     )
 
@@ -63,10 +85,18 @@ def list_students(
 def get_student(
     student_id: str,
     db: Session = Depends(get_db),
-    _admin: User = Depends(staff_only),
+    user: User = Depends(staff_only),
 ) -> StudentDetail:
-    student = student_service.get_student_or_404(db, student_id)
-    return StudentDetail.model_validate(student)
+    if user.role == "teacher":
+        student = student_service.get_student_for_teacher(db, student_id, user.teacher_id)
+        if student is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view profiles of the students you teach",
+            )
+    else:
+        student = student_service.get_student_or_404(db, student_id)
+    return _student_detail(StudentDetail.model_validate(student), redact_contact=user.role != "admin")
 
 
 @router.put("/students/{student_id}", response_model=StudentResponse)
@@ -101,9 +131,22 @@ def create_enrollment(
 def list_student_parents(
     student_id: str,
     db: Session = Depends(get_db),
-    _admin: User = Depends(admin_only),
+    user: User = Depends(staff_only),
 ) -> dict:
-    """All parents linked to a student (admin-only)."""
+    """Parents linked to a student.
+
+    Admins can look up any student. Teachers can only look up students they
+    teach (the same "own courses" scope used for profiles) so they can reach a
+    guardian about absences or poor performance. Parents have the portal for
+    their own children and no access to other people's records.
+    """
+    if user.role == "teacher":
+        student = student_service.get_student_for_teacher(db, student_id, user.teacher_id)
+        if student is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view parents of the students you teach",
+            )
     parents = parent_service.list_student_parents(db, student_id)
     return {
         "data": [ParentSummary.model_validate(p) for p in parents],

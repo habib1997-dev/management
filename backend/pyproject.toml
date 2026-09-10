@@ -27,10 +27,11 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.6",
     "pypdf>=4.0",
+    "pillow>=10.0",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"student_management" = ["*.env.example"]
+"student_management" = ["*.env.example", "static/branding/*.png", "static/branding/*.jpg", "static/branding/*.jpeg", "static/branding/*.webp"]

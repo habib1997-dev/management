@@ -9,6 +9,12 @@ from sqlalchemy.orm import Session, selectinload
 from student_management.models import Teacher, User
 from student_management.schemas.teacher import TeacherCreate, TeacherUpdate
 from student_management.security import hash_password
+from student_management.services.commit import commit_or_conflict, flush_or_conflict
+from student_management.services.user_accounts import (
+    assert_email_free,
+    user_email_taken,
+    user_for_teacher,
+)
 
 
 def get_teacher_or_404(db: Session, teacher_id) -> Teacher:
@@ -34,6 +40,11 @@ def create_teacher(db: Session, payload: TeacherCreate) -> Teacher:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A teacher with this email already exists",
         )
+    if user_email_taken(db, payload.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email is already used by a login account",
+        )
     teacher = Teacher(
         name=payload.name.strip(),
         email=payload.email.lower(),
@@ -41,7 +52,7 @@ def create_teacher(db: Session, payload: TeacherCreate) -> Teacher:
     )
     db.add(teacher)
     if payload.password:
-        db.flush()
+        flush_or_conflict(db)
         db.add(
             User(
                 email=payload.email.lower(),
@@ -50,7 +61,7 @@ def create_teacher(db: Session, payload: TeacherCreate) -> Teacher:
                 teacher_id=teacher.teacher_id,
             )
         )
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(teacher)
     return teacher
 
@@ -62,6 +73,7 @@ def list_teachers(db: Session) -> list[Teacher]:
 def update_teacher(db: Session, teacher: Teacher, payload: TeacherUpdate) -> Teacher:
     data = payload.model_dump(exclude_unset=True)
     email = data.get("email")
+    linked_user = user_for_teacher(db, teacher.teacher_id)
     if email is not None:
         existing = (
             db.query(Teacher)
@@ -76,22 +88,43 @@ def update_teacher(db: Session, teacher: Teacher, payload: TeacherUpdate) -> Tea
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A teacher with this email already exists",
             )
+        assert_email_free(
+            db, email, exclude_user_id=linked_user.user_id if linked_user else None
+        )
         data["email"] = email.lower()
+        if linked_user is not None:
+            linked_user.email = email.lower()
     if data.get("name"):
         data["name"] = data["name"].strip()
     if "subjects_taught" in data:
         data["subjects_taught"] = (data["subjects_taught"] or "").strip() or None
+    password = data.pop("password", None)
+    if password is not None:
+        user = linked_user or user_for_teacher(db, teacher.teacher_id)
+        new_email = str(data.get("email", teacher.email)).lower()
+        if user is None:
+            user = User(
+                email=new_email,
+                password_hash=hash_password(password),
+                role="teacher",
+                teacher_id=teacher.teacher_id,
+            )
+            db.add(user)
+        else:
+            user.password_hash = hash_password(password)
+            user.email = new_email
+            user.auth_version += 1
     for field, value in data.items():
         if field == "subjects_taught":
             setattr(teacher, field, data["subjects_taught"])
         elif value is not None:
             setattr(teacher, field, value)
-    db.flush()
+    flush_or_conflict(db)
     if "status" in data:
-        user = db.query(User).filter(User.teacher_id == teacher.teacher_id).first()
+        user = user_for_teacher(db, teacher.teacher_id)
         if user is not None:
             user.active = data["status"]
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(teacher)
     return teacher
 

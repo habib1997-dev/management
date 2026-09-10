@@ -13,7 +13,13 @@ export function AuthProvider({ children }) {
       body: { email, password },
     })
     saveAuth(data)
-    setUser({ role: data.role, user_id: data.user_id, email: data.email })
+    setUser({
+      role: data.role,
+      user_id: data.user_id,
+      email: data.email,
+      teacher_id: data.teacher_id || null,
+      parent_id: data.parent_id || null,
+    })
     setToken(data.access_token)
     return data.role
   }

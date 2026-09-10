@@ -6,10 +6,12 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from student_management.models import User
+from student_management.models import Parent, Teacher, User
 from student_management.security import hash_password
+from student_management.services.commit import commit_or_conflict
 from student_management.services.parent_service import get_parent_or_404
 from student_management.services.teacher_service import get_teacher_or_404
+from student_management.services.user_accounts import EMAIL_TAKEN, user_email_taken
 
 
 def create_user_for(
@@ -43,10 +45,14 @@ def create_teacher_account(db: Session, teacher_id, password: str) -> User:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A login already exists for this teacher",
         )
+    if user_email_taken(db, teacher.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=EMAIL_TAKEN
+        )
     user = create_user_for(
         db, email=teacher.email, role="teacher", password=password, teacher_id=teacher.teacher_id
     )
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(user)
     return user
 
@@ -58,10 +64,14 @@ def create_parent_account(db: Session, parent_id, password: str) -> User:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A login already exists for this parent",
         )
+    if user_email_taken(db, parent.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=EMAIL_TAKEN
+        )
     user = create_user_for(
         db, email=parent.email, role="parent", password=password, parent_id=parent.parent_id
     )
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(user)
     return user
 
@@ -89,8 +99,17 @@ def update_user_account(
 ) -> User:
     if password is not None:
         user.password_hash = hash_password(password)
+        user.auth_version += 1
     if active is not None:
         user.active = active
+        if user.role == "teacher" and user.teacher_id is not None:
+            teacher = db.get(Teacher, user.teacher_id)
+            if teacher is not None:
+                teacher.status = active
+        elif user.role == "parent" and user.parent_id is not None:
+            parent = db.get(Parent, user.parent_id)
+            if parent is not None:
+                parent.status = active
     db.commit()
     db.refresh(user)
     return user

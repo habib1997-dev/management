@@ -7,9 +7,32 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from student_management.models import Enrollment, Student
+from student_management.models import Course, Enrollment, Student
 from student_management.schemas.enrollment import EnrollmentCreate
 from student_management.schemas.student import StudentEnrollment, StudentUpdate
+from student_management.services.commit import commit_or_conflict, flush_or_conflict
+
+
+def get_student_for_teacher(db: Session, student_id, teacher_id) -> Student | None:
+    """Find a student only if they are in one of the teacher's courses.
+
+    Combines existence and ownership in a single query so an unknown id and an
+    existing-but-unauthorized id are indistinguishable to the caller.
+    """
+    if teacher_id is None:
+        return None
+    try:
+        sid = uuid.UUID(str(student_id))
+    except (ValueError, AttributeError):
+        return None
+    return (
+        db.query(Student)
+        .filter(
+            Student.student_id == sid,
+            Student.courses.any(Course.teacher_id == teacher_id),
+        )
+        .first()
+    )
 
 
 def get_student_or_404(db: Session, student_id: uuid.UUID) -> Student:
@@ -50,7 +73,7 @@ def create_student(
         enrollment_date=date.today(),
     )
     db.add(student)
-    db.flush()
+    flush_or_conflict(db)
     db.add(
         Enrollment(
             student_id=student.student_id,
@@ -58,7 +81,7 @@ def create_student(
             enrollment_date=student.enrollment_date,
         )
     )
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(student)
     return student
 
@@ -70,8 +93,11 @@ def list_students(
     search: str | None,
     grade_level: str | None,
     active: bool | None,
+    own_teacher_id: uuid.UUID | None = None,
 ) -> tuple[list[Student], int]:
     query = db.query(Student)
+    if own_teacher_id is not None:
+        query = query.filter(Student.courses.any(Course.teacher_id == own_teacher_id))
     if search:
         term = f"%{search.strip().lower()}%"
         query = query.filter(
@@ -116,7 +142,7 @@ def update_student(db: Session, student: Student, payload: StudentUpdate) -> Stu
     for field, value in data.items():
         if value is not None:
             setattr(student, field, value)
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(student)
     return student
 

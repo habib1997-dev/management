@@ -43,6 +43,7 @@ class ParentUpdate(BaseModel):
     email: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=50)
     status: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
 
     @pydantic.field_validator("email")
     @classmethod

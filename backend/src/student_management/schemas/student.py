@@ -63,6 +63,8 @@ class StudentEnrollment(BaseModel):
 class StudentUpdate(BaseModel):
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
     last_name: str | None = Field(default=None, min_length=1, max_length=100)
+    date_of_birth: date | None = None
+    grade_level: str | None = Field(default=None, min_length=1, max_length=20)
     email: str | None = None
     phone: str | None = Field(default=None, max_length=50)
     active: bool | None = None
@@ -82,6 +84,24 @@ class StudentUpdate(BaseModel):
         if not re.fullmatch(PHONE_PATTERN, value):
             raise ValueError("phone must be a valid phone number")
         return value
+
+    @pydantic.field_validator("grade_level")
+    @classmethod
+    def strip_grade_level(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("grade_level must not be blank")
+        return stripped
+
+    @pydantic.model_validator(mode="after")
+    def validate_dates(self) -> "StudentUpdate":
+        if self.date_of_birth is not None and self.date_of_birth >= datetime.now(
+            UTC
+        ).date():
+            raise ValueError("date_of_birth must be a past date")
+        return self
 
 
 class StudentSummary(BaseModel):
@@ -108,7 +128,7 @@ class StudentResponse(BaseModel):
 
 
 class StudentListResponse(BaseModel):
-    data: list[StudentSummary]
+    data: list[StudentDetail]
     meta: dict
 
 

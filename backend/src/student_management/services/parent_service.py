@@ -10,8 +10,42 @@ from student_management.models import Parent, Student, User
 from student_management.schemas.parent import ParentCreate, ParentUpdate
 from student_management.security import hash_password
 from student_management.services.attendance_service import get_student_or_404
+from student_management.services.commit import commit_or_conflict, flush_or_conflict
+from student_management.services.user_accounts import (
+    assert_email_free,
+    user_email_taken,
+    user_for_parent,
+)
 
 STUDENT_MISSING = "One or more students not found"
+
+
+def _resolve_students(db: Session, student_ids: list) -> list[Student]:
+    """Resolve student ids in ONE batched query (no per-id N+1 lookups)."""
+    ids = []
+    seen: set[uuid.UUID] = set()
+    for sid in student_ids:
+        try:
+            u = uuid.UUID(str(sid))
+        except (ValueError, AttributeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_MISSING
+            )
+        if u in seen:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Duplicate student IDs are not allowed",
+            )
+        seen.add(u)
+        ids.append(u)
+    if not ids:
+        return []
+    students = db.query(Student).filter(Student.student_id.in_(ids)).all()
+    if len(students) != len(ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_MISSING
+        )
+    return students
 
 
 def get_parent_or_404(db: Session, parent_id) -> Parent:
@@ -39,6 +73,11 @@ def create_parent(db: Session, payload: ParentCreate) -> Parent:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A parent with this email already exists",
         )
+    if user_email_taken(db, payload.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email is already used by a login account",
+        )
 
     parent = Parent(
         name=payload.name.strip(),
@@ -46,24 +85,11 @@ def create_parent(db: Session, payload: ParentCreate) -> Parent:
         phone=payload.phone,
     )
     if payload.student_ids:
-        students = []
-        for sid in payload.student_ids:
-            try:
-                student = db.get(Student, uuid.UUID(str(sid)))
-            except (ValueError, AttributeError):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_MISSING
-                )
-            if student is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_MISSING
-                )
-            students.append(student)
-        parent.students = students
+        parent.students = _resolve_students(db, payload.student_ids)
 
     db.add(parent)
     if payload.password:
-        db.flush()
+        flush_or_conflict(db)
         db.add(
             User(
                 email=payload.email.lower(),
@@ -72,7 +98,7 @@ def create_parent(db: Session, payload: ParentCreate) -> Parent:
                 parent_id=parent.parent_id,
             )
         )
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(parent)
     return parent
 
@@ -84,6 +110,7 @@ def list_parents(db: Session) -> list[Parent]:
 def update_parent(db: Session, parent: Parent, payload: ParentUpdate) -> Parent:
     data = payload.model_dump(exclude_unset=True)
     email = data.get("email")
+    linked_user = user_for_parent(db, parent.parent_id)
     if email is not None:
         existing = (
             db.query(Parent)
@@ -98,18 +125,39 @@ def update_parent(db: Session, parent: Parent, payload: ParentUpdate) -> Parent:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A parent with this email already exists",
             )
+        assert_email_free(
+            db, email, exclude_user_id=linked_user.user_id if linked_user else None
+        )
         data["email"] = email.lower()
+        if linked_user is not None:
+            linked_user.email = email.lower()
     if data.get("name"):
         data["name"] = data["name"].strip()
+    password = data.pop("password", None)
+    if password is not None:
+        new_email = str(data.get("email", parent.email)).lower()
+        user = user_for_parent(db, parent.parent_id)
+        if user is None:
+            user = User(
+                email=new_email,
+                password_hash=hash_password(password),
+                role="parent",
+                parent_id=parent.parent_id,
+            )
+            db.add(user)
+        else:
+            user.password_hash = hash_password(password)
+            user.email = new_email
+            user.auth_version += 1
     for field, value in data.items():
         if value is not None:
             setattr(parent, field, value)
-    db.flush()
+    flush_or_conflict(db)
     if "status" in data:
-        user = db.query(User).filter(User.parent_id == parent.parent_id).first()
+        user = user_for_parent(db, parent.parent_id)
         if user is not None:
             user.active = data["status"]
-    db.commit()
+    commit_or_conflict(db)
     db.refresh(parent)
     return parent
 
@@ -154,20 +202,7 @@ def update_parent_students(
     db: Session, parent: Parent, student_ids: list
 ) -> Parent:
     """Replace the parent's linked children (swap pattern like course roster)."""
-    students = []
-    for sid in student_ids:
-        try:
-            student = db.get(Student, uuid.UUID(str(sid)))
-        except (ValueError, AttributeError):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_MISSING
-            )
-        if student is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=STUDENT_MISSING
-            )
-        students.append(student)
-    parent.students = students
+    parent.students = _resolve_students(db, student_ids)
     db.commit()
     db.refresh(parent)
     return parent

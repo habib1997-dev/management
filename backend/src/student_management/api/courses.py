@@ -16,6 +16,7 @@ from student_management.schemas.course import (
     CourseSummary,
     CourseUpdate,
 )
+from student_management.schemas.parent import ParentSummary
 from student_management.schemas.student import StudentSummary
 from student_management.services import course_service
 
@@ -99,6 +100,36 @@ def list_course_students(
         "data": [StudentSummary.model_validate(s) for s in students],
         "meta": {"total": len(students)},
     }
+
+
+@router.get("/courses/{course_id}/parents", response_model=dict)
+def list_course_parents(
+    course_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(staff_only),
+) -> dict:
+    """Parents of the students in a course, grouped per student.
+
+    A teacher can view this for their own courses so they can reach guardians
+    about absences or poor performance; admins for any course.
+    """
+    course = course_service.get_course_or_404(db, course_id)
+    assert_can_access_course(course, user)
+    students = course_service.list_course_students(db, course_id)
+    parents_by_student = course_service.parents_by_student(
+        db, [s.student_id for s in students]
+    )
+    data = [
+        {
+            "student_id": str(s.student_id),
+            "student_name": f"{s.first_name} {s.last_name}",
+            "parents": [
+                ParentSummary.model_validate(p) for p in parents_by_student.get(s.student_id, [])
+            ],
+        }
+        for s in students
+    ]
+    return {"data": data, "meta": {"total": len(students)}}
 
 
 @router.put("/courses/{course_id}/students", response_model=CourseDetail)

@@ -282,3 +282,82 @@ def test_attendance_auth_required(client, db_session, make_auth_headers):
     assert client.post("/api/v1/attendance", json=payload).status_code == 401
     parent = make_auth_headers(role="parent")
     assert client.post("/api/v1/attendance", json=payload, headers=parent).status_code == 403
+
+
+def test_student_attendance_teacher_sees_only_own_courses(
+    client, db_session, make_auth_headers
+):
+    """A teacher viewing a student they teach sees only their own course's records."""
+    admin = make_auth_headers(role="admin")
+    tid_a = client.post(
+        "/api/v1/teachers",
+        json={
+            "name": "Att Teacher A",
+            "email": "att.a@schoolsystem.com",
+            "subjects_taught": "Math",
+        },
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    tid_b = client.post(
+        "/api/v1/teachers",
+        json={
+            "name": "Att Teacher B",
+            "email": "att.b@schoolsystem.com",
+            "subjects_taught": "Chem",
+        },
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    cid_a = client.post(
+        "/api/v1/courses",
+        json={"name": "Math", "teacher_id": tid_a, "grade_level": "9", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+    cid_b = client.post(
+        "/api/v1/courses",
+        json={"name": "Chem", "teacher_id": tid_b, "grade_level": "9", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+
+    sid = client.post(
+        "/api/v1/students",
+        json={
+            "first_name": "Shared",
+            "last_name": "Student",
+            "date_of_birth": "2012-01-05",
+            "grade_level": "9",
+        },
+        headers=admin,
+    ).json()["student"]["student_id"]
+    client.put(f"/api/v1/courses/{cid_a}/students", json={"student_ids": [sid]}, headers=admin)
+    client.put(f"/api/v1/courses/{cid_b}/students", json={"student_ids": [sid]}, headers=admin)
+
+    client.post(
+        "/api/v1/attendance",
+        json={
+            "course_id": cid_a,
+            "date": "2026-09-01",
+            "records": [{"student_id": sid, "status": "present"}],
+        },
+        headers=admin,
+    )
+    client.post(
+        "/api/v1/attendance",
+        json={
+            "course_id": cid_b,
+            "date": "2026-09-02",
+            "records": [{"student_id": sid, "status": "absent"}],
+        },
+        headers=admin,
+    )
+
+    teacher_a = make_auth_headers(
+        email="att.a.teacher@schoolsystem.com", role="teacher", teacher_id=tid_a
+    )
+    view = client.get(f"/api/v1/students/{sid}/attendance", headers=teacher_a)
+    assert view.status_code == 200
+    assert view.json()["meta"]["total"] == 1
+    assert view.json()["data"][0]["course_id"] == cid_a
+
+    admin_view = client.get(f"/api/v1/students/{sid}/attendance", headers=admin)
+    assert admin_view.status_code == 200
+    assert admin_view.json()["meta"]["total"] == 2

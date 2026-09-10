@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+build/
+dist/
 .venv/
 venv/
 *.po
@@ -17,6 +19,9 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
+
+# Backups (private data - never commit; keep encrypted & off-server in prod)
+backups/
 
 # Node / frontend
 node_modules/

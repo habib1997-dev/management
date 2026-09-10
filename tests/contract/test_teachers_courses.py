@@ -194,6 +194,21 @@ def test_list_courses_and_filters(client, make_auth_headers):
     assert by_grade["data"][0]["name"] == "Chemistry"
 
 
+def test_list_courses_bad_teacher_id_filter(client, make_auth_headers):
+    headers = make_auth_headers()
+
+    malformed = client.get("/api/v1/courses?teacherId=not-a-uuid", headers=headers)
+    assert malformed.status_code == 400
+    assert "teacher" in malformed.json()["detail"].lower()
+
+    unknown = client.get(
+        "/api/v1/courses?teacherId=00000000-0000-0000-0000-000000000000",
+        headers=headers,
+    )
+    assert unknown.status_code == 200
+    assert unknown.json()["meta"]["total"] == 0
+
+
 def test_get_update_course(client, make_auth_headers):
     headers = make_auth_headers()
     tid = make_teacher(client, headers).json()["teacher"]["teacher_id"]
@@ -281,6 +296,21 @@ def test_course_students_enforce_max_capacity(client, make_auth_headers):
     )
     assert ok.status_code == 200
     assert ok.json()["max_students"] == 2
+
+
+def test_course_students_reject_duplicate_ids(client, make_auth_headers):
+    headers = make_auth_headers()
+    tid = make_teacher(client, headers).json()["teacher"]["teacher_id"]
+    cid = make_course(client, headers, tid).json()["course"]["course_id"]
+    sid = create_student_for_course(client, headers)
+
+    dup = client.put(
+        f"/api/v1/courses/{cid}/students",
+        json={"student_ids": [sid, sid]},
+        headers=headers,
+    )
+    assert dup.status_code == 400
+    assert "duplicate" in dup.json()["detail"].lower()
 
 
 def test_course_students_assign_and_list(client, make_auth_headers):

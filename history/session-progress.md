@@ -1,13 +1,20 @@
 # Session Progress Snapshot
 
-**Updated**: 2026-09-08
+**Updated**: 2026-09-10
 **Branch**: `001-student-management`
 **Feature**: 001-student-management (Student Management System)
-**Last Action**: "Edit" panels replace Deactivate buttons — Teachers, Students, Parents each get one
-Edit button whose panel pre-fills the profile and includes an "Account active" checkbox (folded-in
-deactivate/restore); Parents' panel also edits linked children. Backend PUT endpoints extended to
-accept the profile fields. **119 tests green, ruff clean.** Next: teacher screens, parent portal,
-report PDF button (T054/T055/T057/T058).
+**Last Action**: Release-blocker batch complete — all 5 corrections incorporated and verified.
+Auth hardening via `User.auth_version` (integer, starts 0, +1 on every password reset; tokens
+without the claim count as 0 so deployed sessions are NOT logged out — old tokens die instantly
+after any reset). Deleted `backend/build/` + added `build/` to `.gitignore`. `ALLOWED_HOSTS`
+rejects a literal `*` anywhere in production. backup.py now parses the DB URL into `PG*` env
+vars (credentials never on the command line), preserves SSL query params (`sslmode=require`
+for Neon), merges into a copy of the full environment, and requires `--maintenance` to restore
+PostgreSQL (docs state: stop the live web service first). Logo served with the correct MIME by
+extension. Duplicate `student_ids` now 400 on course rosters AND parent-children swaps.
+Ruff now run as `python -m ruff check .` (covers scripts + migrations). **198 tests green,
+ruff clean repo-wide**, `npm run build` OK. Only remaining step: final commit, then
+Render/Neon deployment (both need explicit user OK).
 
 ## Context / Goal
 
@@ -131,10 +138,33 @@ courses, parents/parent portal, PDF report cards, React frontend. Working throug
 - Verification: `npm.cmd run build` passes (186 kB JS / 3.5 kB CSS); live test through the Vite
   proxy — login as admin, then students/teachers/courses/parents all returned data (backend dev
   server already running on :8000). `npm.cmd` (not `npm`) required on Windows (PS execution policy).
-- Remaining Phase E: T054 teacher attendance screen, T055 teacher grades screen, T057 parent portal,
-  T058 report-card PDF download button. Then Phase F (T059–T063).
-- NOTE: backend housekeeping changes (parents/administrators/account/course_service etc.) are still
-  uncommitted after commit e4598f5 — commit them before Phase F close.
+- Remaining Phase E after this session: NONE — all screens done (see "Phase E complete" below).
+  Next is Phase F (T059–T063).
+- NOTE: commit b59d321 captured the admin screens + Edit panels + deactivate + docs. The
+  teacher+parent screens (this session) are NOT yet committed.
+
+### Phase E complete: teacher + parent screens (2026-09-08, build session)
+- **T054 Teacher Attendance** (`frontend/src/pages/Attendance.jsx`, route `/attendance`): lists the
+  teacher's own courses (`GET /courses` auto-filters by role), picks course + date, loads roster
+  from `GET /courses/{id}` and pre-fills statuses from `GET /attendance/{course_id}?date=`, saves via
+  `POST /api/v1/attendance`. Status options present/absent/late/excused.
+- **T055 Teacher Grades** (`frontend/src/pages/Grades.jsx`, route `/grades`): picks course, per-student
+  row with grade 0–100, type quiz/test/homework/final, assigned + due dates → `POST /api/v1/grades`;
+  shows recorded grades via `GET /courses/{id}/grades`.
+- **T057 Parent Portal** (`frontend/src/pages/Portal.jsx`, route `/portal`): calls
+  `GET /parents/{parent_id}/portal` using the parent_id now returned at login; renders each child
+  with attendance + grades tables.
+- **T058 Report PDF button**: uses new `downloadFile()` helper in `api.js` (blob → save) against new
+  `GET /api/v1/reports/portal/{student_id}` (parent-only, own children; 403 otherwise — mirrors the
+  teacher `GET /reports/{student_id}` guard). Filename `report_card_{last}_{first}.pdf`.
+- **Backend additions**: `LoginResponse` + login endpoint now carry `teacher_id`/`parent_id`
+  (`schemas/auth.py`, `api/auth.py`); `api/reports.py` adds the portal report route. Frontend
+  `saveAuth`/auth.jsx persist those ids for the session.
+- **Tests**: `tests/contract/test_reports.py` — parent can download own child (200, %PDF),
+  parent can't download unlinked child (403); `tests/integration/test_auth.py` — login returns
+  teacher_id/parent_id (parent) and nulls (admin). Full suite **123 passed, ruff clean**,
+  `npm run build` OK (200 kB JS).
+- Nav: Layout `teacher: [Attendance, Grades]`, `parent: [My Children]`; Dashboard copy updated.
 
 ### Soft-delete / Deactivate (2026-09-08) — "Remove" is now possible
 - **User decision**: soft-delete (records never erased) + deactivation blocks access too.
@@ -286,15 +316,137 @@ courses, parents/parent portal, PDF report cards, React frontend. Working throug
 - Everything requested, incl. the search box, is now BUILT (see "Soft-delete / Deactivate"). **110 tests
   pass, ruff clean, npm build OK.** Frontend live on Vite proxy.
 
+### Phase F — sellable-demo package (2026-09-09, user-approved plan)
+
+**Config safety (Phase 1)**
+- Environment meanings explicit: `dev` = development only; `prod` OR `production` normalize to
+  production; any other value (e.g. `staging`) → startup error. Production requires PostgreSQL
+  (`POSTGRES_RE = r"^postgresql(?:[+][\w-]+)?://"`, accepts `+psycopg` driver suffix), explicit
+  `ALLOWED_HOSTS`, and an explicit `SECRET_KEY` ≠ dev fallback, ≥32 chars.
+- `tests/unit/test_config_guard.py` grew from 6 → **13 cases**. `.env.example` + AGENTS.md updated.
+
+**Single-source branding (Phase 2)**
+- `services/school_profile.py` is the ONE source: `get_branding()` + `logo_path()` feed BOTH the public
+  `GET /api/v1/settings/brand` endpoint and the PDF letterhead — no self-HTTP call from the PDF builder.
+- Logo filename is a validated plain basename inside `src/student_management/static/branding/`
+  (no separators/traversal; ext whitelist; missing file → startup error in `main.py`).
+- `scripts/make_logo.py` (Pillow) renders the original green/gold crest → `static/branding/logo.png`.
+- PDF header = brand band: logo + school name (white) + tagline (gold) + gold accent bar; subtitle =
+  tagline. Frontend: `src/brand.js` fetches before first paint → CSS vars, tab title, login page
+  (logo + name + **"Demo preview"** badge), sidebar brand. Favicon = logo.
+
+**Backup / restore (Phase 3)**
+- `scripts/backup.py`: SQLite uses the ONLINE backup API; Postgres uses `pg_dump`/`pg_restore`.
+  `--list`; `--restore --file X --confirm` always writes an automatic `pre_restore_*` snapshot first.
+- `backups/` added to root `.gitignore`; deployment note = keep encrypted, off-server.
+
+**CSV exports (Phase 4)**
+- Admin-only `GET /api/v1/export/students.csv` + `/grades.csv`; formula-injection neutralized
+  (`= + - @` cell → `'`-prefixed). Download buttons on the admin Students page.
+
+**Verification (Phase 5)**
+- **Migration parity**: alembic autogenerate against fresh `upgrade head` DB → EMPTY diff
+  (models == `db5791264280`+`c4b1a9f2e8d3`; temp revision deleted).
+- **173 tests pass, ruff clean, `npm run build` OK.**
+- Real demo smoke on :8001 green: brand (`Usman Public School`, demo=true), admin login + students,
+  31 KB report PDF, CSV, logo PNG, teacher login (alice.cohen@schoolsystem.com), parent login
+  (rosa.martinez@demo.school) → portal 2 children (Liam, Isabella) → child PDF 200.
+
+**Next**: single final commit (Phase E + demo + sellable package) — awaiting user OK.
+
+**Bugfix (2026-09-09, post-verification)**: Students page Edit panel — the table list returns only
+`StudentSummary` (no `date_of_birth`/`email`/`phone`), so opening Edit left the Date of birth empty
+and the browser's `required` validation blocked saving (e.g. toggling "Account active") with
+"please fill this field". Fixed in `frontend/src/pages/Students.jsx`: `startEdit` now fetches
+`GET /api/v1/students/{id}` (full `StudentDetail`) to pre-fill the real DOB/email/phone; `saveEdit`
+also omits an empty `date_of_birth` from the PUT body (same pattern as email/phone). `npm run build`
+OK. No backend change; 173 tests still relevant.
+
+## Session: contact-privacy (2026-09-09, pending commit)
+
+User asked what teachers can see about students, then approved adding contact columns to the
+Students table — deciding student email/phone are **admin-only**, while teachers can see linked
+parents' name/email/phone for **their own-course** students (to call about absences/bad grades).
+Logins for parents to demo: teacher Attendance/Grades get a **Parent contact** column. NO parent
+contact on PDFs. Login demo-hint shown only when `brand.demo`; non-admins redirected from admin
+pages.
+
+Decisions (do not revert): student contact admin-only; teacher parent-contact OK; no PDF contact;
+include non-admin page redirect.
+
+Backend:
+- `schemas/student.py`: `StudentListResponse.data: list[StudentDetail]` (was `StudentSummary`).
+- `api/students.py`: helper `_student_detail(detail, redact_contact)` — non-admin rows get
+  `email=None`, `phone=None` in the list AND single lookups; `GET /students/{id}/parents` is now
+  `staff_only` and teacher-scoped via `get_student_for_teacher` (403 w/ "You can only view parents
+  of the students you teach"; unknown student 403 for teachers, 404 for admins; parents 403).
+- `api/courses.py`: new `GET /api/v1/courses/{course_id}/parents` (staff_only) — guarded with
+  `get_course_or_404` + `assert_can_access_course`; returns `{data: [{student_id, student_name,
+  parents: [ParentSummary]}]}` + `meta.total`.
+- `services/course_service.py`: bulk `parents_by_student(db, student_ids)` — ONE query
+  (Student join parents filtered by ids), returns UUID-keyed dict; no N+1.
+
+Frontend:
+- `pages/Students.jsx`: Email + Phone columns (`s.email || '—'`).
+- `styles.css`: `th/td { overflow-wrap: anywhere }` + `.parent-contact`/`.parent-line`/`.parent-name`.
+- `pages/Attendance.jsx` + `pages/Grades.jsx`: fetch `GET /courses/{courseId}/parents` in
+  Promise.all and render a "Parent contact" column (parent name, then muted phone · email; `—` when
+  none; multiple parents stacked).
+- `pages/Login.jsx`: demo hint gated behind `brand.demo`.
+- new `components/AdminOnly.jsx` (`role !== 'admin'` → `<Navigate to="/" replace />`); `App.jsx`
+  wraps `/students /teachers /courses /parents`.
+
+Tests (177 total):
+- `tests/contract/test_students.py`: +2 — admin list/detail include email+phone; teacher rows
+  redacted (list + detail), parent 403 on detail. NOTE: teacher scoping already tested elsewhere.
+- `tests/contract/test_parents.py`: +1 — teacher who teaches the student gets 200 with parent
+  name/email/phone via `GET /students/{id}/parents`; non-teaching teacher 403; unknown 403; parent 403.
+- `tests/contract/test_course_parents.py`: NEW — own-course teacher 200 + row shape, other-course
+  teacher 403, per-course parent rows, no-parent student → empty list, admin 200, parent 403,
+  anonymous 401, unknown course 404.
+- Gotcha: `make_auth_headers` reuses the `User` by EMAIL (line 45 conftest) — two teacher roles in
+  one test MUST get distinct emails or the second inherits the first's `teacher_id`.
+
+Docs: `openapi.yaml` (list → `StudentDetail` w/ redaction note; single-student note; parents-lookup
+scope; new `/courses/{course_id}/parents` path — **33 paths, YAML valid**); `quickstart.md` privacy
+section + course-parents + updated parents-lookup line.
+
+Verification: `python -m ruff check backend/src tests` clean; `python -m pytest -q` → **177 passed,
+1 warning** (~98s); `cmd /c "npm run build"` OK (dist 207k).
+
+## Session: password + single-panel add/edit (2026-09-09, pending commit)
+
+User wanted the Teachers/Parents **Edit** to be an **in-place panel** like the Students screen (not a
+separate bottom panel), and asked for a way to set a **forgotten password**. Approved design:
+
+- `TeacherUpdate` / `ParentUpdate` (schemas/teacher.py, schemas/parent.py) gain optional
+  `password` (min 8, max 128). `update_teacher` / `update_parent` reset the linked `users`
+  password, or **create the first login** if the person never had one (reuses
+  `user_for_teacher`/`user_for_parent`; syncs email; no login row created otherwise).
+- Frontend `Teachers.jsx` / `Parents.jsx` rewritten: ONE panel whose heading swaps
+  ("Add a teacher"/"Add a parent" ⇄ "Edit teacher"/"Edit parent"). Edit mode shows an
+  **Account active** checkbox + **New password (optional — leave blank to keep current)**;
+  a Cancel edit button restores the add form. Bottom edit panels removed (Students-style).
+- Parents edit keeps the Linked-children picker inside the panel: empty search → hint;
+  typed → already-linked children (ticked) + matches; saves via the profile PUT + the
+  `/students` swap PUT.
+- Tests: `tests/contract/test_profile_edit.py` +8 — reset existing login (old pw 401,
+  new 200) for teacher + parent, create-first-login for teacher + parent, combined
+  profile+status+password, short-password 422 for both roles. **184 passed, ruff clean**,
+  `npm run build` OK.
+- Docs: openapi.yaml `TeacherUpdate`/`ParentUpdate` gained `password` (+ PUT summaries,
+  33 paths, YAML valid); quickstart edit-line updated.
+
 ## Relevant Files (absolute)
 - `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\main.py` — app + lifespan + routers
-- `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\api\{students,teachers,courses,auth,attendance,grades,parents,reports,administrators}.py`
+- `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\api\{students,teachers,courses,auth,attendance,grades,parents,reports,administrators,school_profile,exports}.py`
 - `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\schemas\{student,enrollment,teacher,course,auth,common,attendance,grade,parent,account}.py`
-- `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\services\{student_service,teacher_service,course_service,attendance_service,grade_service,parent_service,account_service,report_service}.py`
+- `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\services\{student_service,teacher_service,course_service,attendance_service,grade_service,parent_service,account_service,report_service,school_profile}.py`
+- `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\static\branding\logo.png` + `scripts\make_logo.py`, `scripts\backup.py`
 - `C:\Users\Naqeeb\Desktop\management\backend\src\student_management\models\` — student, teacher, course, enums (statuses/roles; GradeLevel enum removed)
 - `C:\Users\Naqeeb\Desktop\management\tests\conftest.py` — db/client/make_auth_headers fixtures
 - `C:\Users\Naqeeb\Desktop\management\tests\contract\test_{students,teachers_courses,attendance,grades,parents,accounts,portal,reports,deactivate}.py`, `tests\integration\test_*_flow.py`
-- `C:\Users\Naqeeb\Desktop\management\frontend\src\` — Vite+React app: `main.jsx`, `App.jsx`, `api.js`, `auth.jsx`, `styles.css`; `components/{RequireAuth,Layout}.jsx`; `pages/{Login,Dashboard,Students,Teachers,Courses,Parents}.jsx`
+- `C:\Users\Naqeeb\Desktop\management\frontend\src\` — Vite+React app: `main.jsx`, `App.jsx`, `api.js`, `auth.jsx`, `brand.js`, `styles.css`; `components/{RequireAuth,Layout}.jsx`; `pages/{Login,Dashboard,Students,Teachers,Courses,Parents,Attendance,Grades,Portal}.jsx`
 - `C:\Users\Naqeeb\Desktop\management\specs\001-student-management\tasks.md` — task status (T001–T049 done)
 - `C:\Users\Naqeeb\Desktop\management\specs\001-student-management\contracts\openapi.yaml` — teachers/courses/attendance/grades/parents/portal/reports documented
 - `C:\Users\Naqeeb\Desktop\management\backend\scripts\seed.py` — demo credentials + data

@@ -180,6 +180,35 @@ def test_admin_resets_password(client, db_session, make_auth_headers):
     assert login(client, VALID_TEACHER["email"], "newpw456").status_code == 200
 
 
+def test_password_reset_invalidates_old_login_token(client, db_session, make_auth_headers):
+    headers = make_auth_headers()
+    client.post(
+        "/api/v1/teachers", json=deepcopy(VALID_TEACHER) | {"password": "firstpw123"}, headers=headers
+    )
+    user_id = str(make_user(db_session, VALID_TEACHER["email"]).user_id)
+
+    old_login = client.post(
+        "/api/v1/auth/login", json={"email": VALID_TEACHER["email"], "password": "firstpw123"}
+    )
+    assert old_login.status_code == 200
+    old_token = old_login.json()["access_token"]
+    old_headers = {"Authorization": f"Bearer {old_token}"}
+
+    # 403 = credentials valid but wrong role (admin-only endpoint); 401 = invalid token
+    before = client.get(f"/api/v1/teachers/{user_id}", headers=old_headers)
+    assert before.status_code == 403
+
+    reset = client.put(
+        f"/api/v1/administrators/users/{user_id}",
+        json={"password": "newpw456"},
+        headers=headers,
+    )
+    assert reset.status_code == 200
+
+    after = client.get(f"/api/v1/teachers/{user_id}", headers=old_headers)
+    assert after.status_code == 401
+
+
 def test_admin_deactivates_and_reactivates_login(client, db_session, make_auth_headers):
     headers = make_auth_headers()
     client.post(
@@ -198,6 +227,56 @@ def test_admin_deactivates_and_reactivates_login(client, db_session, make_auth_h
     )
     assert on.status_code == 200
     assert login(client, VALID_TEACHER["email"], "teacherpw123").status_code == 200
+
+
+def test_admin_login_deactivate_syncs_teacher_status(client, db_session, make_auth_headers):
+    headers = make_auth_headers()
+    client.post(
+        "/api/v1/teachers", json=deepcopy(VALID_TEACHER) | {"password": "teacherpw123"}, headers=headers
+    )
+    user_id = str(make_user(db_session, VALID_TEACHER["email"]).user_id)
+
+    off = client.put(
+        f"/api/v1/administrators/users/{user_id}", json={"active": False}, headers=headers
+    )
+    assert off.status_code == 200
+    teachers = client.get("/api/v1/teachers", headers=headers).json()["data"]
+    row = next(t for t in teachers if t["email"] == VALID_TEACHER["email"])
+    assert row["status"] is False
+    assert login(client, VALID_TEACHER["email"], "teacherpw123").status_code == 401
+
+    on = client.put(
+        f"/api/v1/administrators/users/{user_id}", json={"active": True}, headers=headers
+    )
+    assert on.status_code == 200
+    teachers = client.get("/api/v1/teachers", headers=headers).json()["data"]
+    row = next(t for t in teachers if t["email"] == VALID_TEACHER["email"])
+    assert row["status"] is True
+    assert login(client, VALID_TEACHER["email"], "teacherpw123").status_code == 200
+
+
+def test_admin_login_deactivate_syncs_parent_status(client, db_session, make_auth_headers):
+    headers = make_auth_headers()
+    client.post(
+        "/api/v1/parents", json=deepcopy(VALID_PARENT) | {"password": "parentpw123"}, headers=headers
+    )
+    user_id = str(make_user(db_session, VALID_PARENT["email"]).user_id)
+
+    off = client.put(
+        f"/api/v1/administrators/users/{user_id}", json={"active": False}, headers=headers
+    )
+    assert off.status_code == 200
+    parents = client.get("/api/v1/parents", headers=headers).json()["data"]
+    row = next(p for p in parents if p["email"] == VALID_PARENT["email"])
+    assert row["status"] is False
+
+    on = client.put(
+        f"/api/v1/administrators/users/{user_id}", json={"active": True}, headers=headers
+    )
+    assert on.status_code == 200
+    parents = client.get("/api/v1/parents", headers=headers).json()["data"]
+    row = next(p for p in parents if p["email"] == VALID_PARENT["email"])
+    assert row["status"] is True
 
 
 def test_admin_update_user_errors(client, db_session, make_auth_headers):
@@ -240,3 +319,48 @@ def test_admin_user_management_admin_only(client, db_session, make_auth_headers)
         ).status_code
         == 403
     )
+
+
+# ---------------- Account creation blocks email collisions ----------------
+
+def test_teacher_account_creation_email_conflicts_with_other_login(
+    client, make_auth_headers
+):
+    headers = make_auth_headers()
+    tid = client.post(
+        "/api/v1/teachers", json=deepcopy(VALID_TEACHER), headers=headers
+    ).json()["teacher"]["teacher_id"]
+    # A parent claims the teacher's email as their login BEFORE the teacher gets one.
+    client.post(
+        "/api/v1/parents",
+        json=deepcopy(VALID_PARENT) | {"email": VALID_TEACHER["email"], "password": "parentpw123"},
+        headers=headers,
+    )
+    resp = client.post(
+        f"/api/v1/teachers/{tid}/account",
+        json={"password": "teacherpw123"},
+        headers=headers,
+    )
+    assert resp.status_code == 400
+    assert "login account" in resp.json()["detail"].lower()
+
+
+def test_parent_account_creation_email_conflicts_with_other_login(
+    client, make_auth_headers
+):
+    headers = make_auth_headers()
+    pid = client.post(
+        "/api/v1/parents", json=deepcopy(VALID_PARENT), headers=headers
+    ).json()["parent"]["parent_id"]
+    client.post(
+        "/api/v1/teachers",
+        json=deepcopy(VALID_TEACHER) | {"email": VALID_PARENT["email"], "password": "teacherpw123"},
+        headers=headers,
+    )
+    resp = client.post(
+        f"/api/v1/parents/{pid}/account",
+        json={"password": "parentpw123"},
+        headers=headers,
+    )
+    assert resp.status_code == 400
+    assert "login account" in resp.json()["detail"].lower()

@@ -58,17 +58,22 @@ def get_student_attendance(
     user: User = Depends(staff_only),
 ) -> dict:
     attendance_service.get_student_or_404(db, student_id)
-    if (
-        user.role == "teacher"
-        and not attendance_service.student_in_teacher_courses(
+    if user.role == "teacher":
+        if not attendance_service.student_in_teacher_courses(
             db, student_id, user.teacher_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view attendance for your own students",
+            )
+        own_course_ids = course_service.list_teacher_course_ids(
+            db, user.teacher_id
         )
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only view attendance for your own students",
+        records = attendance_service.list_student_attendance(
+            db, student_id, course_ids=own_course_ids
         )
-    records = attendance_service.list_student_attendance(db, student_id)
+    else:
+        records = attendance_service.list_student_attendance(db, student_id)
     return {
         "data": [AttendanceDetail.model_validate(r) for r in records],
         "meta": {"total": len(records)},

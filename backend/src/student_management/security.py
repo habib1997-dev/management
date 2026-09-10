@@ -25,6 +25,7 @@ def create_access_token(user: User) -> str:
         "sub": str(user.user_id),
         "role": user.role,
         "email": user.email,
+        "auth_version": user.auth_version,
         "exp": datetime.now(UTC)
         + timedelta(minutes=settings.access_token_expire_minutes),
     }

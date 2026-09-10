@@ -158,6 +158,32 @@ def test_update_student(client, make_auth_headers):
     assert body["student"]["phone"] == "+1 (555) 0102"
 
 
+def test_update_student_date_of_birth_and_grade_level(client, make_auth_headers):
+    headers = make_auth_headers()
+    sid = register_valid_student(client, headers).json()["student"]["student_id"]
+
+    response = client.put(
+        f"/api/v1/students/{sid}",
+        json={"date_of_birth": "2011-06-20", "grade_level": "O-Level"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    student = response.json()["student"]
+    assert student["date_of_birth"] == "2011-06-20"
+    assert student["grade_level"] == "O-Level"
+
+    future = client.put(
+        f"/api/v1/students/{sid}", json={"date_of_birth": "2030-01-01"}, headers=headers
+    )
+    assert future.status_code == 422
+    assert "date_of_birth" in future.json()["detail"][0]["msg"]
+
+    blank = client.put(
+        f"/api/v1/students/{sid}", json={"grade_level": "   "}, headers=headers
+    )
+    assert blank.status_code == 422
+
+
 def test_update_student_requires_admin_and_404(client, make_auth_headers):
     headers = make_auth_headers()
     sid = register_valid_student(client, headers).json()["student"]["student_id"]
@@ -200,3 +226,231 @@ def test_create_enrollment_rejects_missing_student(client, make_auth_headers):
         headers=make_auth_headers(),
     )
     assert response.status_code == 404
+
+
+def test_teacher_list_students_scoped_to_own_courses(client, db_session, make_auth_headers):
+    admin = make_auth_headers(role="admin")
+    tid = client.post(
+        "/api/v1/teachers",
+        json={
+            "name": "Scoped Teacher",
+            "email": "scoped.t@schoolsystem.com",
+            "subjects_taught": "Math",
+        },
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    cid = client.post(
+        "/api/v1/courses",
+        json={"name": "Algebra", "teacher_id": tid, "grade_level": "9", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+
+    sids = []
+    for i in range(3):
+        resp = client.post(
+            "/api/v1/students",
+            json={
+                "first_name": f"Child{i}",
+                "last_name": "One",
+                "date_of_birth": "2012-01-01",
+                "grade_level": "9",
+            },
+            headers=admin,
+        )
+        sids.append(resp.json()["student"]["student_id"])
+    client.post(
+        "/api/v1/students",
+        json={
+            "first_name": "Elsewhere",
+            "last_name": "Two",
+            "date_of_birth": "2012-01-01",
+            "grade_level": "9",
+        },
+        headers=admin,
+    )
+
+    client.put(f"/api/v1/courses/{cid}/students", json={"student_ids": sids}, headers=admin)
+
+    teacher = make_auth_headers(
+        email="scoped.t.teacher@schoolsystem.com", role="teacher", teacher_id=tid
+    )
+    resp = client.get("/api/v1/students", headers=teacher)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["meta"]["total"] == 3
+    names = {s["first_name"] for s in body["data"]}
+    assert names == {"Child0", "Child1", "Child2"}
+    assert "Elsewhere" not in names
+
+    # A student in TWO of the teacher's courses still appears exactly once.
+    cid2 = client.post(
+        "/api/v1/courses",
+        json={"name": "Geometry", "teacher_id": tid, "grade_level": "9", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+    client.put(f"/api/v1/courses/{cid2}/students", json={"student_ids": [sids[0]]}, headers=admin)
+    rerun = client.get("/api/v1/students", headers=teacher)
+    assert rerun.json()["meta"]["total"] == 3
+
+    # Search/grade filters still apply WITHIN the teacher's roster.
+    searched = client.get("/api/v1/students?search=Elsewhere", headers=teacher)
+    assert searched.json()["meta"]["total"] == 0
+    found = client.get("/api/v1/students?search=Child1", headers=teacher)
+    assert found.json()["meta"]["total"] == 1
+
+    # Admin still sees everyone.
+    admin_all = client.get("/api/v1/students", headers=admin)
+    assert admin_all.json()["meta"]["total"] == 4
+
+
+def test_get_student_profile_teacher_gate(client, db_session, make_auth_headers):
+    """Teachers can read a full profile ONLY for students they teach; otherwise 403."""
+    admin = make_auth_headers(role="admin")
+    tid = client.post(
+        "/api/v1/teachers",
+        json={
+            "name": "Profile Teacher",
+            "email": "profile.t@schoolsystem.com",
+            "subjects_taught": "Math",
+        },
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    cid = client.post(
+        "/api/v1/courses",
+        json={"name": "Algebra", "teacher_id": tid, "grade_level": "9", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+
+    own = client.post(
+        "/api/v1/students",
+        json={
+            "first_name": "Mine",
+            "last_name": "Student",
+            "date_of_birth": "2012-01-01",
+            "grade_level": "9",
+        },
+        headers=admin,
+    ).json()["student"]["student_id"]
+    others = client.post(
+        "/api/v1/students",
+        json={
+            "first_name": "Theirs",
+            "last_name": "Student",
+            "date_of_birth": "2012-01-01",
+            "grade_level": "9",
+        },
+        headers=admin,
+    ).json()["student"]["student_id"]
+    client.put(f"/api/v1/courses/{cid}/students", json={"student_ids": [own]}, headers=admin)
+
+    teacher = make_auth_headers(
+        email="profile.t.teacher@schoolsystem.com", role="teacher", teacher_id=tid
+    )
+    own_resp = client.get(f"/api/v1/students/{own}", headers=teacher)
+    assert own_resp.status_code == 200
+    assert own_resp.json()["email"] is not None or "student_id" in own_resp.json()
+    assert own_resp.json()["student_id"] == own
+
+    # Existing-but-not-taught -> 403
+    assert client.get(f"/api/v1/students/{others}", headers=teacher).status_code == 403
+
+    # Unknown and unauthorized are indistinguishable for teachers -> 403
+    unknown = client.get(
+        "/api/v1/students/00000000-0000-0000-0000-000000000000", headers=teacher
+    )
+    assert unknown.status_code == 403
+
+    # Parents get no access to student profiles.
+    parent = make_auth_headers(role="parent")
+    assert client.get(f"/api/v1/students/{own}", headers=parent).status_code == 403
+
+    # Admin: full access for any student, 404 only for genuinely unknown ids.
+    assert client.get(f"/api/v1/students/{others}", headers=admin).status_code == 200
+    admin_unknown = client.get(
+        "/api/v1/students/00000000-0000-0000-0000-000000000000", headers=admin
+    )
+    assert admin_unknown.status_code == 404
+
+
+def test_student_list_contact_admin_only(client, make_auth_headers):
+    """Admins see student email/phone in the list; teachers get null."""
+    admin = make_auth_headers(role="admin")
+    tid = client.post(
+        "/api/v1/teachers",
+        json={"name": "Contact Teacher", "email": "contact.t@schoolsystem.com", "subjects_taught": "Math"},
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    cid = client.post(
+        "/api/v1/courses",
+        json={"name": "Algebra", "teacher_id": tid, "grade_level": "9", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+    sid = client.post(
+        "/api/v1/students",
+        json={
+            "first_name": "Contact",
+            "last_name": "Kid",
+            "date_of_birth": "2012-01-01",
+            "grade_level": "9",
+            "email": "kid@schoolsystem.com",
+            "phone": "555-100-2000",
+        },
+        headers=admin,
+    ).json()["student"]["student_id"]
+    client.put(f"/api/v1/courses/{cid}/students", json={"student_ids": [sid]}, headers=admin)
+
+    admin_list = client.get("/api/v1/students?search=Contact", headers=admin).json()
+    row = admin_list["data"][0]
+    assert row["email"] == "kid@schoolsystem.com"
+    assert row["phone"] == "555-100-2000"
+
+    teacher = make_auth_headers(
+        email="contact.t.teacher@schoolsystem.com", role="teacher", teacher_id=tid
+    )
+    teacher_list = client.get("/api/v1/students?search=Contact", headers=teacher).json()
+    trow = teacher_list["data"][0]
+    assert trow["first_name"] == "Contact"
+    assert trow["email"] is None
+    assert trow["phone"] is None
+
+
+def test_student_detail_contact_admin_only(client, make_auth_headers):
+    """Teachers get the profile but never the student's own email/phone."""
+    admin = make_auth_headers(role="admin")
+    tid = client.post(
+        "/api/v1/teachers",
+        json={"name": "Profile Teacher", "email": "profile.contact.t@schoolsystem.com", "subjects_taught": "Math"},
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    cid = client.post(
+        "/api/v1/courses",
+        json={"name": "Algebra", "teacher_id": tid, "grade_level": "9", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+    sid = client.post(
+        "/api/v1/students",
+        json={
+            "first_name": "Detail",
+            "last_name": "Kid",
+            "date_of_birth": "2012-01-01",
+            "grade_level": "9",
+            "email": "detail@schoolsystem.com",
+            "phone": "555-300-4000",
+        },
+        headers=admin,
+    ).json()["student"]["student_id"]
+    client.put(f"/api/v1/courses/{cid}/students", json={"student_ids": [sid]}, headers=admin)
+
+    teacher = make_auth_headers(
+        email="profile.contact.t.teacher@schoolsystem.com", role="teacher", teacher_id=tid
+    )
+    resp = client.get(f"/api/v1/students/{sid}", headers=teacher)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["first_name"] == "Detail"
+    assert body["email"] is None
+    assert body["phone"] is None
+
+    admin_body = client.get(f"/api/v1/students/{sid}", headers=admin).json()
+    assert admin_body["email"] == "detail@schoolsystem.com"
+    assert admin_body["phone"] == "555-300-4000"

@@ -48,10 +48,33 @@ cp .env.example .env
 Edit `.env` with your settings:
 
 ```
+APP_ENV=dev
 DATABASE_URL=postgresql://postgres@localhost:5432/student_management
-SECRET_KEY=your-secret-key-change-this
+SECRET_KEY=dev-secret-key-change-me-32bytes-minimum
 ALLOWED_HOSTS=localhost,127.0.0.1
 ```
+
+Environment meanings (enforced at startup — an invalid value refuses to run):
+- `dev` — development only (lenient: auto-creates tables).
+- `prod` or `production` — production: requires PostgreSQL
+  (`postgresql://` or `postgresql+psycopg://`), an explicit `ALLOWED_HOSTS`,
+  and an explicit `SECRET_KEY` (≠ the dev default, ≥ 32 characters).
+- Anything else (e.g. `staging`) → startup error.
+
+School branding also lives here (single source — the login page, sidebar, tab
+title and report-card PDF all read it):
+
+```
+SCHOOL_NAME=Usman Public School
+SCHOOL_TAGLINE=Knowledge, Character, Excellence
+BRAND_PRIMARY_COLOR=#0B6B4F
+BRAND_SECONDARY_COLOR=#D9A441
+BRAND_DEMO=true
+SCHOOL_LOGO=logo.png
+```
+
+To rebrand for a real school, just change these values (and drop a logo file
+named to match `SCHOOL_LOGO` into the branding folder).
 
 ### 4. Database Migrations
 
@@ -64,7 +87,7 @@ alembic upgrade head
 ### 5. Start the Development Server
 
 ```bash
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn student_management.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 The server will start at `http://127.0.0.1:8000`.
@@ -178,11 +201,27 @@ All requests except the login endpoint require a bearer token. Obtain one by pro
 POST http://127.0.0.1:8000/api/v1/auth/login
 ```
 
+```json
+{ "email": "admin@schoolsystem.com", "password": "password123" }
+```
+
+```json
+{
+  "access_token": "<jwt>",
+  "role": "teacher",
+  "user_id": "123e4567-e89b-12d3-a456-426614174001",
+  "email": "jane.smith@schoolsystem.com",
+  "teacher_id": "123e4567-e89b-12d3-a456-426614174002"
+}
+```
+
+The login response carries `teacher_id` for teachers and `parent_id` for parents (the admin/teacher/parent profile id you need for role-scoped endpoints).
+
 ```
 Authorization: Bearer <token>
 ```
 
-Each role's token scope limits access (see RBAC below).
+Each role's token scope limits access (see RBAC below). Login is throttled: 5 failed attempts per email + client IP within 15 minutes returns `429 Too Many Requests`; a successful login resets the counter.
 
 ### Search Students
 
@@ -290,6 +329,16 @@ The `password` field is **optional**. If provided, a login account is created fo
 Grade values must be between 0 and 100. **Get a student's grades**: `GET /api/v1/students/{student_id}/grades?courseId=<uuid>`
 **Get course grades**: `GET /api/v1/courses/{course_id}/grades`
 
+A teacher can only see/record grades for students in **their own courses** (course assignments are checked server-side); a filtered lookup on another teacher's course returns **403**. Admins can record and view grades in any course.
+
+**Edit an existing grade** (teacher of the course, or admin): `PUT /api/v1/grades/{grade_id}`
+
+```json
+{ "grade_value": 95.0 }
+```
+
+`grade_value` (0–100), `assignment_type` (quiz/test/homework/final), `date_assigned`, and `date_due` are all optional — only provided fields change, and the student + course cannot be changed. Editing a grade updates the same row (never duplicates it).
+
 ### Manage Parents (admin)
 
 **Create a parent** (admin-only):
@@ -318,8 +367,14 @@ The `password` field is **optional**. If provided, a login account is created fo
 
 **List parents**: `GET /api/v1/parents`
 **List a parent's students**: `GET /api/v1/parents/{parent_id}/students`
-**List a student's parents**: `GET /api/v1/students/{student_id}/parents` (admin-only)
+**List a student's parents**: `GET /api/v1/students/{student_id}/parents` — admins for any student; teachers only for students they teach (so they can call a guardian about absence or poor performance); parents get `403`.
+**List parents for a whole course** (teachers, own courses only): `GET /api/v1/courses/{course_id}/parents` — returns one row per enrolled student with that student's parent list (name, email, phone). This is what the teacher Attendance and Grades screens use for the "Parent contact" column.
 **Change a parent's children later** (admin-only): `PUT /api/v1/parents/{parent_id}/students` with `{"student_ids": [...]}` — replaces the linked children (e.g. a second child joins the school).
+
+### Privacy rules
+
+- **Student email and phone are admin-only.** Teacher-facing student lists/details return them as `null`; the parent portal and PDF reports never include student contact info.
+- **Parent name/email/phone are visible to admins and to teachers of that student's courses** (for guardian outreach), never to other parents.
 
 ### Account management (admin)
 
@@ -342,10 +397,10 @@ Note: courses enforce their `max_students` size on roster assignment — assigni
 No data is ever permanently erased — records are **soft-deleted** so history (courses, grades, attendance) stays intact. Set the record's flag to `false` to deactivate; it also disables the person's login. Set it back to `true` to restore.
 
 In the website, each screen has an **Edit** button whose panel lets an admin fix mistakes **and** toggle "Account active" in one place (un-tick to deactivate). Behind the scenes:
+**Edit a teacher** (admin-only): `PUT /api/v1/teachers/{teacher_id}` — optional `name`, `email`, `subjects_taught`, `status`, and `password` (resets their login, or creates a first login if they never had one)
 
-**Edit a teacher** (admin-only): `PUT /api/v1/teachers/{teacher_id}` — optional `name`, `email`, `subjects_taught`, `status`
-**Edit a parent** (admin-only): `PUT /api/v1/parents/{parent_id}` — optional `name`, `email`, `phone`, `status` (use `PUT /parents/{id}/students` separately to change linked children)
-**Edit/deactivate a student** (admin-only): `PUT /api/v1/students/{student_id}` — optional `name`, `email`, `phone`, `active`
+**Edit a parent** (admin-only): `PUT /api/v1/parents/{parent_id}` — optional `name`, `email`, `phone`, `status`, and `password` (same behavior as teachers; use `PUT /parents/{id}/students` separately to change linked children)
+**Edit/deactivate a student** (admin-only): `PUT /api/v1/students/{student_id}` — optional `name`, `email`, `phone`, `active`, `date_of_birth`, `grade_level`
 
 Only provided fields change. A second parent/teacher with the same email is rejected (400), and email/phone are format-checked.
 
@@ -360,15 +415,65 @@ A parent views their linked child(ren)'s grades, attendance, and enrollment:
 
 **Endpoint**: `GET /api/v1/parents/{parent_id}/portal`
 
-**Response** (200 OK): grouped by child, includes attendance and grade records. Parents cannot view students they are not linked to (403).
+**Response** (200 OK): grouped by child, includes attendance and grade records. Parents cannot view students they are not linked to (403). The `parent_id` comes from the **login response** (`POST /api/v1/auth/login` returns `parent_id` for parents and `teacher_id` for teachers).
 
 ### Report Card PDF (admin/teacher)
 
 **Endpoint**: `GET /api/v1/reports/{student_id}`
 
-Returns a **PDF** (`application/pdf`) report card summarizing the student's grades, attendance, and course enrollments.
+Returns a **PDF** report summarizing the student's grades, attendance, and course enrollments.
+- **Admin**: gets the full **Academic Report Card** for any student (filename `report_card_…`).
+- **Teacher**: gets an **Academic Progress Report** scoped to their own courses only (filename `progress_report_…`); a teacher who does not teach the student gets **403**.
 
-## Role-Based Access Control (RBAC)
+### Report Card PDF (parent — own children)
+
+**Endpoint**: `GET /api/v1/reports/portal/{student_id}`
+
+Lets a parent download the full report card PDF for one of their **own linked children** only; otherwise **403**.
+
+## School branding (single source)
+
+Branding is stored in one place — `backend/src/student_management/config.py` + the branding folder — and is read by both the public API and the PDF builder (never fetched over HTTP):
+
+- **Settings API (public-ish)**: `GET /api/v1/settings/brand` → school name, tagline, colors, `demo` flag, logo URL. The logo itself: `GET /api/v1/settings/brand/logo` (served as an image; also used as the browser tab favicon).
+- **Files**: the logo lives in `backend/src/student_management/static/branding/`. The config value `SCHOOL_LOGO` is a plain filename (path separators/reversal rejected, only `.png/.jpg/.jpeg/.webp` allowed); a missing file stops the server at startup rather than failing at runtime.
+- **Demo crest**: `python -m scripts.make_logo` (from `backend/`) regenerates the original green/gold crest `logo.png` (needs Pillow). The demo flag makes the login page show a "Demo preview" badge.
+- The PDF report card's letterhead (logo + name + tagline + gold accent bar) comes from this same service, so rebranding for a sale is a one-time config + logo change.
+
+## Backup & restore
+
+**Create a backup** (from `backend/`):
+
+```bash
+python -m scripts.backup
+```
+
+Writes a timestamped snapshot into `backend/backups/` (e.g. `student_management_20260909-154325.db`). SQLite uses the online backup API (safe while the server is running); PostgreSQL uses `pg_dump`. `backups/` is git-ignored — for a real deployment, store backups encrypted off-server.
+
+**List backups**:
+
+```bash
+python -m scripts.backup --list
+```
+
+**Restore a backup** — always requires the explicit `--confirm` flag; a snapshot of the current state (`pre_restore_…`) is saved automatically first:
+
+```bash
+python -m scripts.backup --restore --file student_management_20260909-154325.db --confirm
+```
+
+For PostgreSQL, backups are `.sql`/`.dump` files restored with `pg_restore`.
+
+## CSV data exports (admin)
+
+Export student and grade data as spreadsheet files (no login pages needed — csv formula-injection is defused so cells starting with `= + - @` can't run as formulas):
+
+- `GET /api/v1/export/students.csv`
+- `GET /api/v1/export/grades.csv`
+
+Both require an **admin** bearer token. In the website, the Students page has "Download students CSV" / "Download grades CSV" buttons.
+
+## RBAC quick reference
 
 | Operation | Admin | Teacher | Parent |
 |-----------|:-----:|:-------:|:------:|
@@ -393,23 +498,13 @@ All tests should pass. Test files are located in `tests/` directory.
 
 ## Default Admin Account
 
-The first administrator account must be created via the setup script or database seeder. Example:
+One admin login is created by the database seeder (from `backend/`):
 
-```
-POST http://127.0.0.1:8000/api/v1/administrators
-```
-
-With body:
-
-```json
-{
-  "name": "System Administrator",
-  "email": "admin@schoolsystem.com",
-  "role": "admin"
-}
+```bash
+python -m scripts.seed
 ```
 
-Teacher and parent accounts are created through the admin flows above — either by passing an optional `password` when creating the teacher/parent, or later via the `POST /api/v1/teachers/{teacher_id}/account` / `POST /api/v1/parents/{parent_id}/account` endpoints. Each account has its own login credentials, and login is role-scoped (admin/teacher/parent).
+That creates the admin account `admin@schoolsystem.com` with password `changeme123` (change it right away in production). Teacher and parent accounts are created through the admin flows above — either by passing an optional `password` when creating the teacher/parent, or later via the `POST /api/v1/teachers/{teacher_id}/account` / `POST /api/v1/parents/{parent_id}/account` endpoints. Each account has its own login credentials, and login is role-scoped (admin/teacher/parent).
 
 ## Directory Structure
 
@@ -426,9 +521,6 @@ specs/001-student-management/
 
 ## Next Steps
 
-1. Customize the data model for your institution's specific needs
-2. Extend API endpoints for additional workflows (term scheduling, transcript requests, etc.)
-3. Implement frontend admin/teacher/parent interfaces
-4. Set up role-based access control for all three roles (admin, teacher, parent)
-5. Configure data retention and archival policies
-6. Customize the report card PDF template for your institution's branding
+1. Rebrand for the client school: change the `SCHOOL_*`/`BRAND_*` values in `.env`, swap the logo file, set `BRAND_DEMO=false`.
+2. Deploy to production: PostgreSQL + Alembic migrations + `SECRET_KEY`/`ALLOWED_HOSTS`/`APP_ENV=prod`, HTTPS, and encrypted off-server backups (see "Backup & restore").
+3. Extend API endpoints for additional workflows (term scheduling, transcript requests, etc.)

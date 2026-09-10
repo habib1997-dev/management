@@ -33,6 +33,15 @@ plus an "Account active" checkbox (deactivate/restore folded in — standalone D
 removed). Parents' Edit panel also edits linked children. `tests/contract/test_profile_edit.py`
 (9 tests). **119 tests pass, ruff clean.**
 
+**Completed 2026-09-08 (Phase E teacher + parent screens, T054/T055/T057/T058)**: Teacher
+**Attendance** screen (pick course + date, tick present/absent/late/excused per student) and
+**Grades** screen (pick course, grade 0–100, type quiz/test/homework/final, dates) — both list the
+teacher's own courses via `GET /courses`. Parent **Portal** page shows each linked child's
+attendance + grades with a **"Download report card (PDF)"** button. Backend additions to support
+the portal: login response now includes `teacher_id`/`parent_id`; new
+`GET /reports/portal/{student_id}` lets a parent download their own child's PDF (403 otherwise).
+**123 tests pass, ruff clean, `npm run build` OK.**
+
 **Format**: `- [ ] [TaskID] [P?] [Story?] Description (Size/Blocked-by)`
 
 ---
@@ -129,11 +138,11 @@ removed). Parents' Edit panel also edits linked children. `tests/contract/test_p
 - [x] T051 Login screen (all 3 roles) (M, T050)
 - [x] T052 [P] Admin: student screens (list w/ search + enroll + edit) (M, T051)
 - [x] T053 [P] Admin: teachers + courses screens (M, T051)
-- [ ] T054 [P] Teacher: attendance screen (M, T051)
-- [ ] T055 [P] Teacher: grades screen (M, T051)
+- [x] T054 [P] Teacher: attendance screen (M, T051)
+- [x] T055 [P] Teacher: grades screen (M, T051)
 - [x] T056 [P] Admin: parents screens (M, T051)
-- [ ] T057 Parent: portal page (child's grades, attendance, enrollment) (M, T051)
-- [ ] T058 Report-card PDF download button (S, T057)
+- [x] T057 Parent: portal page (child's grades, attendance, enrollment) (M, T051)
+- [x] T058 Report-card PDF download button (S, T057)
 
 ## Phase F — Final quality check
 

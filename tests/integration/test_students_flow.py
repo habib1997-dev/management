@@ -10,11 +10,30 @@ VALID_STUDENT = {
 
 def test_mvp_student_flow(client, make_auth_headers):
     admin = make_auth_headers(role="admin")
-    teacher = make_auth_headers(role="teacher")
 
     created = client.post("/api/v1/students", json=VALID_STUDENT, headers=admin)
     assert created.status_code == 201
     sid = created.json()["student"]["student_id"]
+
+    # A teacher reads a profile only for a student they actually teach.
+    tid = client.post(
+        "/api/v1/teachers",
+        json={
+            "name": "Grace Teacher",
+            "email": "grace.teacher@schoolsystem.com",
+            "subjects_taught": "Math",
+        },
+        headers=admin,
+    ).json()["teacher"]["teacher_id"]
+    cid = client.post(
+        "/api/v1/courses",
+        json={"name": "Math", "teacher_id": tid, "grade_level": "4", "semester": "Fall 2026"},
+        headers=admin,
+    ).json()["course"]["course_id"]
+    client.put(f"/api/v1/courses/{cid}/students", json={"student_ids": [sid]}, headers=admin)
+    teacher = make_auth_headers(
+        email="grace.teacher1@schoolsystem.com", role="teacher", teacher_id=tid
+    )
 
     found = client.get(f"/api/v1/students/{sid}", headers=teacher)
     assert found.status_code == 200

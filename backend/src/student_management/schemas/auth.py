@@ -1,5 +1,7 @@
 """Pydantic schemas for authentication."""
 
+import uuid
+
 from pydantic import BaseModel, EmailStr, field_validator
 
 
@@ -23,3 +25,5 @@ class LoginResponse(BaseModel):
     role: str
     user_id: str
     email: str
+    teacher_id: uuid.UUID | None = None
+    parent_id: uuid.UUID | None = None

@@ -1,5 +1,7 @@
 """Auth + RBAC integration tests: login, JWT issuance, and role guards."""
 
+import uuid
+
 from student_management.models import User
 from student_management.security import hash_password
 
@@ -41,6 +43,40 @@ def test_login_rejects_wrong_password(client, db_session):
 def test_login_rejects_unknown_email(client, db_session):
     resp = login(client, "nobody@school.edu", "whatever")
     assert resp.status_code == 401
+
+
+def test_login_returns_teacher_and_parent_ids(client, db_session):
+    teacher = User(
+        email="teacher.ids@school.edu",
+        password_hash=hash_password("secret123"),
+        role="teacher",
+        teacher_id=uuid.uuid4(),
+    )
+    parent = User(
+        email="parent.ids@school.edu",
+        password_hash=hash_password("secret123"),
+        role="parent",
+        parent_id=uuid.uuid4(),
+    )
+    db_session.add_all([teacher, parent])
+    db_session.commit()
+
+    t = login(client, "teacher.ids@school.edu", "secret123").json()
+    assert t["role"] == "teacher"
+    assert t["teacher_id"] == str(teacher.teacher_id)
+    assert t["parent_id"] is None
+
+    p = login(client, "parent.ids@school.edu", "secret123").json()
+    assert p["role"] == "parent"
+    assert p["parent_id"] == str(parent.parent_id)
+    assert p["teacher_id"] is None
+
+
+def test_login_returns_null_ids_for_admin(client, db_session):
+    create_user(db_session, "admin.ids@school.edu", "secret123", "admin")
+    body = login(client, "admin.ids@school.edu", "secret123").json()
+    assert body["teacher_id"] is None
+    assert body["parent_id"] is None
 
 
 def test_login_is_case_insensitive_on_email(client, db_session):

@@ -12,6 +12,29 @@ servers:
     description: Development server
 
 paths:
+  /api/v1/auth/login:
+    post:
+      summary: Login with email and password to obtain a JWT bearer token
+      operationId: login
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid email or password
+        '429':
+          description: Too many failed login attempts (locked for 15 minutes)
   /api/v1/students:
     get:
       summary: List all students
@@ -62,8 +85,12 @@ paths:
                 properties:
                   data:
                     type: array
+                    description: >-
+                      Student rows. Admins receive email/phone/date_of_birth;
+                      teachers receive the same shape with personal contact info
+                      nulled (student email/phone are admin-only).
                     items:
-                      $ref: '#/components/schemas/StudentSummary'
+                      $ref: '#/components/schemas/StudentDetail'
                   meta:
                     type: object
                     properties:
@@ -111,6 +138,12 @@ paths:
       operationId: getStudent
       tags:
         - students
+      security:
+        - bearerAuth: []
+      description: >-
+        Admins see the full profile. Teachers see the profile of students they
+        teach only (else 403), with email/phone nulled — student contact info is
+        admin-only. Parents get 403.
       parameters:
         - name: student_id
           in: path
@@ -276,7 +309,7 @@ paths:
         '403':
           description: Forbidden
     put:
-      summary: Update a teacher's profile and/or deactivate-restore (admin-only)
+      summary: Update a teacher's profile, password, and/or deactivate-restore (admin-only)
       operationId: updateTeacher
       tags:
         - teachers
@@ -541,6 +574,59 @@ paths:
         '403':
           description: Forbidden
 
+  /api/v1/courses/{course_id}/parents:
+    get:
+      summary: List parents of the students in a course (grouped per student)
+      operationId: listCourseParents
+      tags:
+        - courses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: >-
+        Teachers can view this for their own courses so they can reach guardians
+        about absences or poor performance; admins for any course. Non-own
+        courses (teacher) and parents are forbidden.
+      responses:
+        '200':
+          description: Successful response with per-student parent lists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        student_id:
+                          type: string
+                          format: uuid
+                        student_name:
+                          type: string
+                        parents:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/ParentSummary'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+        '404':
+          description: Course not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - not your course, or not a teacher/admin
+
   /api/v1/attendance:
     post:
       summary: Mark daily attendance for a course
@@ -644,7 +730,7 @@ paths:
 
   /api/v1/students/{student_id}/parents:
     get:
-      summary: List all parents linked to a student (admin-only)
+      summary: List all parents linked to a student
       operationId: listStudentParents
       tags:
         - students
@@ -657,6 +743,11 @@ paths:
           schema:
             type: string
             format: uuid
+      description: >-
+        Admins can look up any student's parents. Teachers can only look up the
+        parents of students they teach (so they can reach a guardian about
+        absences or poor performance); otherwise 403. Parents have their own
+        portal and cannot view other people's records (403).
       responses:
         '200':
           description: Successful response with linked parents
@@ -703,6 +794,43 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden - teacher not assigned to course
+
+  /api/v1/grades/{grade_id}:
+    put:
+      summary: Edit an existing grade (grade value, type, or dates)
+      operationId: updateGrade
+      tags:
+        - grades
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grade_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeUpdate'
+      responses:
+        '200':
+          description: Grade successfully updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeResponse'
+        '400':
+          description: Bad request - date order violation or student no longer on the course
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - the grade belongs to a course the teacher does not teach
+        '404':
+          description: Grade not found
 
   /api/v1/students/{student_id}/grades:
     get:
@@ -832,7 +960,7 @@ paths:
 
   /api/v1/parents/{parent_id}:
     put:
-      summary: Update a parent's profile, children and/or deactivate-restore (admin-only)
+      summary: Update a parent's profile, password, children and/or deactivate-restore (admin-only)
       operationId: updateParent
       tags:
         - parents
@@ -1007,8 +1135,43 @@ paths:
 
   /api/v1/reports/{student_id}:
     get:
-      summary: Generate report card for a student (PDF export)
+      summary: Generate a report card / progress report PDF for a student
       operationId: generateReportCard
+      tags:
+        - reports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: >
+            Successful response with a PDF. Admins get the full "Academic
+            Report Card" for any student (filename `report_card_…`). Teachers
+            get an "Academic Progress Report" scoped to their own courses only
+            (filename `progress_report_…`); a teacher not teaching the student
+            gets 403.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Student not found
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - teacher does not teach this student via any course
+
+  /api/v1/reports/portal/{student_id}:
+    get:
+      summary: Generate report card for a parent's own child (PDF export)
+      operationId: generateReportCardPortal
       tags:
         - reports
       security:
@@ -1033,7 +1196,7 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: Forbidden (parent must be linked to this student)
 
   /api/v1/administrators:
     get:
@@ -1120,6 +1283,79 @@ paths:
         '403':
           description: Forbidden - not an administrator
 
+  /api/v1/settings/brand:
+    get:
+      summary: Public school branding (name, tagline, colors, demo flag, logo URL)
+      operationId: getBrand
+      tags:
+        - settings
+      responses:
+        '200':
+          description: Brand settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandSettings'
+        '500':
+          description: Branding misconfigured (e.g. configured logo file missing)
+
+  /api/v1/settings/brand/logo:
+    get:
+      summary: Public school logo image (also used as the browser favicon)
+      operationId: getBrandLogo
+      tags:
+        - settings
+      responses:
+        '200':
+          description: Logo image (image/png, image/jpeg, or image/webp)
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: Branding misconfigured (e.g. configured logo file missing)
+
+  /api/v1/export/students.csv:
+    get:
+      summary: CSV export of all students (admin-only)
+      operationId: exportStudentsCsv
+      tags:
+        - export
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Comma-separated values (attachment). Formula-injection defused.
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - not an administrator
+
+  /api/v1/export/grades.csv:
+    get:
+      summary: CSV export of all grades with course + student context (admin-only)
+      operationId: exportGradesCsv
+      tags:
+        - export
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Comma-separated values (attachment). Formula-injection defused.
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - not an administrator
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1128,6 +1364,48 @@ components:
       bearerFormat: JWT
 
   schemas:
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+
+    LoginResponse:
+      type: object
+      required:
+        - access_token
+        - role
+        - user_id
+        - email
+      properties:
+        access_token:
+          type: string
+          description: JWT bearer token (admin/teacher/parent capability is inferred from role)
+        role:
+          type: string
+          enum: [admin, teacher, parent]
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        teacher_id:
+          type: string
+          format: uuid
+          description: Set when role is teacher - identifies the teacher profile
+        parent_id:
+          type: string
+          format: uuid
+          description: Set when role is parent - identifies the parent profile
+
     StudentSummary:
       type: object
       properties:
@@ -1232,7 +1510,7 @@ components:
           maxLength: 100
         status:
           type: string
-          enum: [active, withdrawing]
+          enum: [active, withdrawn, transferring]
           default: active
 
     EnrollmentResponse:
@@ -1341,6 +1619,13 @@ components:
         status:
           type: boolean
           description: Set false to deactivate the teacher (and their login), true to restore
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: >-
+            Optional — resets the teacher's login password, or creates their
+            first login if they do not have one yet.
       description: All fields optional — only provided fields are updated.
 
     TeacherResponse:
@@ -1515,6 +1800,13 @@ components:
         status:
           type: boolean
           description: Set false to deactivate the parent (and their login), true to restore
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: >-
+            Optional — resets the parent's login password, or creates their
+            first login if they do not have one yet.
       description: All fields optional — only provided fields are updated.
 
     UserAdminDetail:
@@ -1751,6 +2043,24 @@ components:
           type: string
           format: date
 
+    GradeUpdate:
+      type: object
+      description: Partial update of a recorded grade. Student and course are not editable.
+      properties:
+        grade_value:
+          type: number
+          minimum: 0
+          maximum: 100
+        assignment_type:
+          type: string
+          enum: [quiz, test, homework, final]
+        date_assigned:
+          type: string
+          format: date
+        date_due:
+          type: string
+          format: date
+
     GradeResponse:
       type: object
       properties:
@@ -1759,4 +2069,22 @@ components:
         grade:
           $ref: '#/components/schemas/GradeDetail'
         message:
+          type: string
+
+    BrandSettings:
+      type: object
+      properties:
+        school_name:
+          type: string
+        tagline:
+          type: string
+        primary_color:
+          type: string
+          example: '#0B6B4F'
+        secondary_color:
+          type: string
+          example: '#D9A441'
+        demo:
+          type: boolean
+        logo_url:
           type: string

@@ -1,29 +1,178 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Users, GraduationCap, BookOpen, HeartHandshake, CalendarCheck, ClipboardCheck, Baby, FileDown } from 'lucide-react'
 import { useAuth } from '../auth.jsx'
+import { api, downloadFile } from '../api.js'
+
+function StatCard({ icon: Icon, label, value }) {
+  return (
+    <div className="stat-card">
+      <span className="stat-icon">
+        <Icon size={22} strokeWidth={2.1} />
+      </span>
+      <div>
+        <div className="stat-num">{value}</div>
+        <div className="stat-label">{label}</div>
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
+  const [stats, setStats] = useState(null)
+  const [children, setChildren] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    if (user?.role === 'admin') {
+      ;(async () => {
+        try {
+          const [students, teachers, courses, parents] = await Promise.all([
+            api('/api/v1/students?pageSize=1'),
+            api('/api/v1/teachers'),
+            api('/api/v1/courses'),
+            api('/api/v1/parents'),
+          ])
+          if (!cancelled) {
+            setStats([
+              { icon: Users, label: 'Students', value: students.meta?.total ?? students.data?.length ?? 0 },
+              { icon: GraduationCap, label: 'Teachers', value: teachers.meta?.total ?? teachers.data?.length ?? 0 },
+              { icon: BookOpen, label: 'Courses', value: courses.meta?.total ?? courses.data?.length ?? 0 },
+              { icon: HeartHandshake, label: 'Parents', value: parents.meta?.total ?? parents.data?.length ?? 0 },
+            ])
+          }
+        } catch (err) {
+          if (!cancelled) setError(err.message)
+        }
+      })()
+    } else if (user?.role === 'parent' && user?.parent_id) {
+      ;(async () => {
+        try {
+          const data = await api(`/api/v1/parents/${user.parent_id}/portal`)
+          if (!cancelled) setChildren(data.parents?.[0]?.children?.length ?? 0)
+        } catch (err) {
+          if (!cancelled) setError(err.message)
+        }
+      })()
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
   return (
     <div>
-      <h1>Welcome, {user?.email}</h1>
-      <div className="card">
-        <p>
-          You are signed in as <strong>{user?.role}</strong>.
+      <div className="dash-hello">
+        <h1>Welcome, {user?.email}</h1>
+        <p className="sub">
+          {user?.role === 'admin' && 'Here is what is happening across your school.'}
+          {user?.role === 'teacher' && 'Mark attendance and record grades for your courses.'}
+          {user?.role === 'parent' && 'Follow your children’s progress from one place.'}
         </p>
+      </div>
+      {error && <div className="alert alert-error">{error}</div>}
+
+      {user?.role === 'admin' && stats && (
+        <div className="stat-grid">
+          {stats.map((s) => (
+            <StatCard key={s.label} {...s} />
+          ))}
+        </div>
+      )}
+
+      {user?.role === 'parent' && children !== null && (
+        <div className="stat-grid">
+          <StatCard icon={Baby} label="Children at school" value={children} />
+        </div>
+      )}
+
+      <div className="quick-grid">
         {user?.role === 'admin' && (
-          <p className="muted">
-            Use the menu on the left to manage students, teachers, courses, and parents.
-          </p>
+          <>
+            <div className="quick-card">
+              <h3>Students</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+                Enroll new students, edit profiles, and download CSV exports.
+              </p>
+              <Link className="btn btn-primary" to="/students">
+                Manage students
+              </Link>
+            </div>
+            <div className="quick-card">
+              <h3>Classes</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+                Create courses, assign teachers, and manage rosters.
+              </p>
+              <Link className="btn" to="/courses">
+                Manage courses
+              </Link>
+            </div>
+          </>
         )}
+
         {user?.role === 'teacher' && (
-          <p className="muted">
-            Teacher tools (attendance &amp; grades) are coming in the next release.
-          </p>
+          <>
+            <div className="quick-card">
+              <h3>Attendance</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+                Record who is present, absent, late, or excused.
+              </p>
+              <Link className="btn btn-primary" to="/attendance">
+                <CalendarCheck size={16} />
+                Open attendance
+              </Link>
+            </div>
+            <div className="quick-card">
+              <h3>Grades</h3>
+              <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+                Record quizzes, tests, homework, and final grades.
+              </p>
+              <Link className="btn" to="/grades">
+                <ClipboardCheck size={16} />
+                Open grades
+              </Link>
+            </div>
+          </>
         )}
+
         {user?.role === 'parent' && (
-          <p className="muted">
-            The parent portal (your children&apos;s grades and attendance) is coming in the
-            next release.
-          </p>
+          <div className="quick-card">
+            <h3>My Children</h3>
+            <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+              See attendance, grades, and download report cards.
+            </p>
+            <Link className="btn btn-primary" to="/portal">
+              <Baby size={16} />
+              Open portal
+            </Link>
+            {children > 0 && (
+              <button
+                className="btn"
+                onClick={() => {
+                  const portal = async () => {
+                    try {
+                      const data = await api(`/api/v1/parents/${user.parent_id}/portal`)
+                      const child = data.parents?.[0]?.children?.[0]
+                      if (child) {
+                        await downloadFile(
+                          `/api/v1/reports/portal/${child.student_id}`,
+                          `report_card_${child.last_name}_${child.first_name}.pdf`
+                        )
+                      }
+                    } catch (err) {
+                      setError(err.message)
+                    }
+                  }
+                  portal()
+                }}
+              >
+                <FileDown size={16} />
+                Download latest report card
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

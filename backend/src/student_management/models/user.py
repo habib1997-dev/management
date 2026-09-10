@@ -5,7 +5,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, func
+import sqlalchemy as sa
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from student_management.db import Base
@@ -35,6 +36,9 @@ class User(Base):
         ForeignKey("parents.parent_id"), nullable=True
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    auth_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sa.text("0")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

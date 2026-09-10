@@ -1,6 +1,7 @@
 """Business logic for report-card PDF generation (ReportLab)."""
 
 import io
+import uuid
 from collections import Counter, defaultdict
 from datetime import date
 from decimal import Decimal
@@ -12,6 +13,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
+    Image,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -20,47 +22,129 @@ from reportlab.platypus import (
 )
 from sqlalchemy.orm import Session
 
+from student_management.config import settings
 from student_management.models import Attendance, Course, Grade, Student
 from student_management.services.attendance_service import get_student_or_404
+from student_management.services.school_profile import logo_path
 
 REPORT_MEDIA_TYPE = "application/pdf"
 
 ATTENDANCE_STATUSES = ("present", "absent", "late", "excused")
 
+PAGE_WIDTH = 6.77 * inch  # A4 width minus the 0.75in side margins
 
-def build_report_data(db: Session, student_id: str) -> dict[str, Any]:
+
+def _brand_band() -> list[Any]:
+    """Letterhead block read from the single branding source.
+
+    Uses the same school name, logo and colours the web app receives from the
+    public ``/settings/brand`` endpoint -- never a hardcoded copy.
+    """
+    primary = colors.HexColor(settings.brand_primary)
+    secondary = colors.HexColor(settings.brand_secondary)
+
+    content: list[Any] = []
+    logo = logo_path()
+    if logo is not None:
+        content.append(Image(str(logo), width=0.6 * inch, height=0.6 * inch))
+
+    name_style = ParagraphStyle(
+        "BrandName",
+        parent=getSampleStyleSheet()["Normal"],
+        alignment=TA_CENTER,
+        fontName="Helvetica-Bold",
+        fontSize=16,
+        leading=19,
+        textColor=colors.white,
+    )
+    tagline_style = ParagraphStyle(
+        "BrandTagline",
+        parent=getSampleStyleSheet()["Normal"],
+        alignment=TA_CENTER,
+        fontSize=10,
+        leading=13,
+        textColor=secondary,
+    )
+    content.append(Paragraph(settings.school_name, name_style))
+    if settings.school_tagline:
+        content.append(Paragraph(settings.school_tagline, tagline_style))
+
+    band = Table([[content]], colWidths=[PAGE_WIDTH])
+    band.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), primary),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 12),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+            ]
+        )
+    )
+
+    accent = Table([[""]], colWidths=[PAGE_WIDTH], rowHeights=[0.06 * inch])
+    accent.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), secondary),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+
+    return [band, accent, Spacer(1, 12)]
+
+
+def build_report_data(
+    db: Session, student_id: str, course_ids: list | None = None
+) -> dict[str, Any]:
     """Gather all data a report card needs for a student.
 
     Course rows are ordered A-Z by name because `grade_level` is free text
     (an alphabetical sort would put "10" before "2"). Callers that need a
     specific academic ordering can sort on a future numeric field.
+
+    When `course_ids` is given, only those courses (and their grades and
+    attendance) are included -- used for a teacher's course-scoped report.
     """
     student = get_student_or_404(db, student_id)
 
-    courses = (
+    scoped_course_ids = None
+    if course_ids:
+        scoped_course_ids = [uuid.UUID(str(c)) for c in course_ids]
+
+    course_query = (
         db.query(Course)
         .join(Course.students)
         .filter(Student.student_id == student.student_id)
-        .order_by(Course.name)
-        .all()
     )
+    if scoped_course_ids:
+        course_query = course_query.filter(Course.course_id.in_(scoped_course_ids))
+    courses = course_query.order_by(Course.name).all()
 
-    grades = (
-        db.query(Grade)
-        .filter(Grade.student_id == student.student_id)
-        .order_by(Grade.course_id, Grade.date_assigned)
-        .all()
+    grade_query = db.query(Grade).filter(Grade.student_id == student.student_id)
+    attendance_query = db.query(Attendance).filter(
+        Attendance.student_id == student.student_id
     )
+    if scoped_course_ids:
+        grade_query = grade_query.filter(Grade.course_id.in_(scoped_course_ids))
+        attendance_query = attendance_query.filter(
+            Attendance.course_id.in_(scoped_course_ids)
+        )
+
+    grades = grade_query.order_by(Grade.course_id, Grade.date_assigned).all()
     grade_by_course: dict[str, list[Grade]] = defaultdict(list)
     for grade in grades:
         grade_by_course[str(grade.course_id)].append(grade)
 
-    attendance = (
-        db.query(Attendance)
-        .filter(Attendance.student_id == student.student_id)
-        .order_by(Attendance.date, Attendance.course_id)
-        .all()
-    )
+    attendance = attendance_query.order_by(
+        Attendance.date, Attendance.course_id
+    ).all()
 
     return {
         "student": student,
@@ -101,10 +185,24 @@ def _attendance_counts(attendance: list[Attendance]) -> dict[str, int]:
     return dict(counts)
 
 
-def build_pdf(db: Session, student_id: str) -> bytes:
-    """Return a PDF report card for a student as raw bytes."""
-    data = build_report_data(db, student_id)
+def build_pdf(
+    db: Session,
+    student_id: str,
+    course_ids: list | None = None,
+    scoped: bool = False,
+) -> bytes:
+    """Return a PDF report for a student as raw bytes.
+
+    `scoped=True` produces a course-scoped "progress report" whose averages and
+    attendance totals cover only `course_ids`; otherwise a full report card.
+    """
+    data = build_report_data(db, student_id, course_ids)
     student: Student = data["student"]
+
+    report_label = "Academic Progress Report" if scoped else "Academic Report Card"
+    doc_title = f"Progress Report - {student.first_name} {student.last_name}"
+    if not scoped:
+        doc_title = f"Report Card - {student.first_name} {student.last_name}"
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -114,7 +212,7 @@ def build_pdf(db: Session, student_id: str) -> bytes:
         leftMargin=0.75 * inch,
         topMargin=0.75 * inch,
         bottomMargin=0.75 * inch,
-        title=f"Report Card - {student.first_name} {student.last_name}",
+        title=doc_title,
     )
     styles = getSampleStyleSheet()
 
@@ -141,8 +239,14 @@ def build_pdf(db: Session, student_id: str) -> bytes:
     )
 
     story: list[Any] = []
-    story.append(Paragraph("Academic Report Card", title_style))
-    story.append(Paragraph("Student Management System", subtitle_style))
+    story.extend(_brand_band())
+    story.append(Paragraph(report_label, title_style))
+    subtitle = (
+        "Course-scoped - includes only courses taught by this teacher"
+        if scoped
+        else settings.school_tagline or "Student Management System"
+    )
+    story.append(Paragraph(subtitle, subtitle_style))
 
     student_info = Table(
         [
