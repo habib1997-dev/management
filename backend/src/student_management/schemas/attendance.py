@@ -32,6 +32,7 @@ class AttendanceDetail(BaseModel):
     attendance_id: uuid.UUID
     student_id: uuid.UUID
     course_id: uuid.UUID
+    course_name: str | None = None
     date: date
     status: str
     marked_by: uuid.UUID | None

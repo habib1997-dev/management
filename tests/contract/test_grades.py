@@ -88,6 +88,7 @@ def test_record_grade_contract_shape(client, db_session, make_auth_headers):
         "grade_id",
         "student_id",
         "course_id",
+        "course_name",
         "grade_value",
         "assignment_type",
         "date_assigned",

@@ -1,11 +1,13 @@
 """Parent endpoints (admin-only management plus parent portal)."""
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from student_management.api.deps import require_roles
 from student_management.db import get_db
-from student_management.models import User
+from student_management.models import Course, User
 from student_management.schemas.account import AccountCreate, AccountDetail, AccountResponse
 from student_management.schemas.attendance import AttendanceDetail
 from student_management.schemas.grade import GradeDetail
@@ -133,14 +135,35 @@ def get_parent_portal(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only view your own portal",
         )
+    course_ids = {
+        *(a.course_id for student in parent.students for a in student.attendance_records),
+        *(g.course_id for student in parent.students for g in student.grades),
+    }
+    course_names: dict[uuid.UUID, str] = {}
+    if course_ids:
+        course_names = dict(
+            db.query(Course.course_id, Course.name)
+            .filter(Course.course_id.in_(course_ids))
+            .all()
+        )
     children = [
         PortalChild(
             student_id=student.student_id,
             first_name=student.first_name,
             last_name=student.last_name,
             grade_level=student.grade_level,
-            attendance=[AttendanceDetail.model_validate(a) for a in student.attendance_records],
-            grades=[GradeDetail.model_validate(g) for g in student.grades],
+            attendance=[
+                AttendanceDetail.model_validate(a).model_copy(
+                    update={"course_name": course_names.get(a.course_id)}
+                )
+                for a in student.attendance_records
+            ],
+            grades=[
+                GradeDetail.model_validate(g).model_copy(
+                    update={"course_name": course_names.get(g.course_id)}
+                )
+                for g in student.grades
+            ],
         )
         for student in parent.students
     ]

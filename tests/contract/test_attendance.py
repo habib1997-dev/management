@@ -81,6 +81,7 @@ def test_mark_attendance_contract_shape(client, db_session, make_auth_headers):
             "attendance_id",
             "student_id",
             "course_id",
+            "course_name",
             "date",
             "status",
             "marked_by",

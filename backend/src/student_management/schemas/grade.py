@@ -49,6 +49,7 @@ class GradeDetail(BaseModel):
     grade_id: uuid.UUID
     student_id: uuid.UUID
     course_id: uuid.UUID
+    course_name: str | None = None
     grade_value: float
     assignment_type: str | None
     date_assigned: date

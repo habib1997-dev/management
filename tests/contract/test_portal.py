@@ -79,9 +79,11 @@ def test_portal_returns_own_children_with_data(client, db_session, make_auth_hea
     assert first["grade_level"] == "9"
     assert len(first["attendance"]) == 1
     assert first["attendance"][0]["status"] == "present"
+    assert first["attendance"][0]["course_name"] == "Biology"
     assert len(first["grades"]) == 1
     assert first["grades"][0]["grade_value"] == 88.0
     assert first["grades"][0]["assignment_type"] == "quiz"
+    assert first["grades"][0]["course_name"] == "Biology"
 
 
 def test_portal_denies_other_parent(client, db_session, make_auth_headers):

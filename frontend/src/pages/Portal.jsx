@@ -84,7 +84,7 @@ export default function Portal() {
                   </h2>
                 </div>
                 <button className="btn btn-ghost" onClick={() => downloadReport(child)} disabled={busyId === child.student_id}>
-                  <Download size={15} />
+                  <Download size={14} />
                   {busyId === child.student_id ? 'Preparing…' : 'Download report card (PDF)'}
                 </button>
               </div>
@@ -105,7 +105,7 @@ export default function Portal() {
                     {child.attendance.map((a) => (
                       <tr key={a.attendance_id}>
                         <td>{a.date}</td>
-                        <td>{a.course_id}</td>
+                        <td>{a.course_name || '—'}</td>
                         <td>{statusPill(a.status)}</td>
                       </tr>
                     ))}
@@ -129,7 +129,7 @@ export default function Portal() {
                   <tbody>
                     {child.grades.map((g) => (
                       <tr key={g.grade_id}>
-                        <td>{g.course_id}</td>
+                        <td>{g.course_name || '—'}</td>
                         <td>{g.assignment_type || '—'}</td>
                         <td>
                           <span className="pill pill-score">{g.grade_value}</span>

@@ -1966,6 +1966,10 @@ components:
         course_id:
           type: string
           format: uuid
+        course_name:
+          type: string
+          nullable: true
+          description: Course name when returned through the parent portal; null for staff endpoints that already carry course context.
         date:
           type: string
           format: date
@@ -2029,6 +2033,10 @@ components:
         course_id:
           type: string
           format: uuid
+        course_name:
+          type: string
+          nullable: true
+          description: Course name when returned through the parent portal; null for staff endpoints that already carry course context.
         grade_value:
           type: number
         assignment_type:
