@@ -73,3 +73,52 @@ except BrandingError as exc:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+def serve_frontend(app: FastAPI) -> None:
+    """Mount the React SPA if a built ``dist/`` directory is available.
+
+    In development ``frontend/dist`` may not exist (you run ``npm run dev``
+    instead).  The helper silently does nothing in that case.
+
+    Set the ``FRONTEND_DIST`` environment variable to override the default
+    path (``<repo>/frontend/dist``).
+    """
+    import os
+    from pathlib import Path
+
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import FileResponse
+    from starlette.staticfiles import StaticFiles
+
+    dist = Path(os.environ.get(
+        "FRONTEND_DIST",
+        str(Path(__file__).resolve().parents[4] / "frontend" / "dist"),
+    ))
+    if not dist.is_dir():
+        return
+    index = dist / "index.html"
+    if not index.is_file():
+        return
+
+    assets = dist / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets)), name="frontend-assets")
+
+    _index_path = str(index)
+
+    class _SPA(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            response = await call_next(request)
+            if (
+                response.status_code == 404
+                and request.method == "GET"
+                and not request.url.path.startswith("/api")
+            ):
+                return FileResponse(_index_path)
+            return response
+
+    app.add_middleware(_SPA)
+
+
+serve_frontend(app)

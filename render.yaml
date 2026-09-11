@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: student-management
+    runtime: docker
+    dockerfilePath: Dockerfile
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: prod
+      - key: DATABASE_URL
+        sync: false          # paste your Neon connection string here
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        sync: false          # set to your service.onrender.com hostname
+      - key: BRAND_DEMO
+        value: "false"
