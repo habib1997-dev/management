@@ -22,6 +22,7 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [stats, setStats] = useState(null)
   const [children, setChildren] = useState(null)
+  const [reportKids, setReportKids] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -61,6 +62,28 @@ export default function Dashboard() {
       cancelled = true
     }
   }, [user])
+
+  async function showReportPicker() {
+    if (reportKids && reportKids.length > 1) {
+      setReportKids(null)
+      return
+    }
+    try {
+      const data = await api(`/api/v1/parents/${user.parent_id}/portal`)
+      const kids = data.parents?.[0]?.children || []
+      if (kids.length === 1) {
+        const child = kids[0]
+        await downloadFile(
+          `/api/v1/reports/portal/${child.student_id}`,
+          `report_card_${child.last_name}_${child.first_name}.pdf`
+        )
+      } else {
+        setReportKids(kids)
+      }
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   return (
     <div>
@@ -148,29 +171,37 @@ export default function Dashboard() {
               Open portal
             </Link>
             {children > 0 && (
-              <button
-                className="btn"
-                onClick={() => {
-                  const portal = async () => {
-                    try {
-                      const data = await api(`/api/v1/parents/${user.parent_id}/portal`)
-                      const child = data.parents?.[0]?.children?.[0]
-                      if (child) {
-                        await downloadFile(
-                          `/api/v1/reports/portal/${child.student_id}`,
-                          `report_card_${child.last_name}_${child.first_name}.pdf`
-                        )
-                      }
-                    } catch (err) {
-                      setError(err.message)
-                    }
-                  }
-                  portal()
-                }}
-              >
+              <button className="btn" onClick={showReportPicker}>
                 <FileDown size={15} />
-                Download latest report card
+                {reportKids && reportKids.length > 1 ? 'Close' : 'Download report card'}
               </button>
+            )}
+            {reportKids && reportKids.length > 1 && (
+              <div className="report-child-picker">
+                <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                  Whose report card?
+                </p>
+                {reportKids.map((c) => (
+                  <button
+                    key={c.student_id}
+                    className="btn"
+                    style={{ marginRight: 8, marginTop: 6 }}
+                    onClick={async () => {
+                      try {
+                        await downloadFile(
+                          `/api/v1/reports/portal/${c.student_id}`,
+                          `report_card_${c.last_name}_${c.first_name}.pdf`
+                        )
+                        setReportKids(null)
+                      } catch (err) {
+                        setError(err.message)
+                      }
+                    }}
+                  >
+                    {c.first_name} {c.last_name}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         )}

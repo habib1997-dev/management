@@ -1127,9 +1127,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ParentPortal'
         '403':
-          description: Forbidden - parent cannot view another student's data
+          description: >-
+            Forbidden - non-owned, unknown, or deactivated parent ids all return
+            403 ("You can only view your own portal") so existence is not leaked.
         '404':
-          description: Parent not found
+          description: Parent not found (only reachable for the caller's own id in abnormal states)
         '401':
           description: Unauthorized
 

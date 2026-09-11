@@ -110,13 +110,14 @@ def test_portal_blocks_admin_and_teacher(client, db_session, make_auth_headers):
     assert client.get(f"/api/v1/parents/{pid}/portal", headers=teacher).status_code == 403
 
 
-def test_portal_404_and_auth(client, db_session, make_auth_headers):
+def test_portal_foreign_and_auth(client, db_session, make_auth_headers):
     _, parent_headers, _, _ = make_parent_with_data(client, make_auth_headers)
 
+    # Any non-owned id (unknown or garbage) reads the same: 403, not 404.
     assert (
         client.get(
             "/api/v1/parents/00000000-0000-0000-0000-000000000000/portal", headers=parent_headers
         ).status_code
-        == 404
+        == 403
     )
     assert client.get("/api/v1/parents/00000000-0000-0000-0000-000000000000/portal").status_code == 401

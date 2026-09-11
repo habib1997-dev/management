@@ -159,11 +159,17 @@ export default function Courses() {
   const activeTeachers = teachers.filter((t) => t.status !== false)
 
   function pickerStudents() {
-    if (rosterSearch.trim() === '') return []
     const byId = {}
     for (const s of detail?.students || []) byId[s.student_id] = s
     for (const s of picker) if (!byId[s.student_id]) byId[s.student_id] = s
-    return Object.values(byId).filter((s) => s.active !== false)
+    let list = Object.values(byId).filter((s) => s.active !== false)
+    const term = rosterSearch.trim().toLowerCase()
+    if (term) {
+      list = list.filter((s) =>
+        `${s.first_name} ${s.last_name}`.toLowerCase().includes(term)
+      )
+    }
+    return list
   }
 
   return (
@@ -321,7 +327,23 @@ export default function Courses() {
           />
           <div className="roster">
             {rosterSearch.trim() === '' ? (
-              <p className="muted">Type a student's name to add them to the course.</p>
+              pickerStudents().length === 0 ? (
+                <p className="muted">No students enrolled yet — type a name to add them.</p>
+              ) : (
+                <>
+                  <p className="muted">Current roster — type to search the whole school.</p>
+                  {pickerStudents().map((s) => (
+                    <label key={s.student_id} className="check">
+                      <input
+                        type="checkbox"
+                        checked={roster.includes(s.student_id)}
+                        onChange={() => toggleStudent(s.student_id)}
+                      />
+                      {s.first_name} {s.last_name} ({s.grade_level})
+                    </label>
+                  ))}
+                </>
+              )
             ) : pickerBusy && picker.length === 0 ? (
               <p className="muted">Searching…</p>
             ) : pickerStudents().length === 0 ? (

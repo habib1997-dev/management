@@ -840,6 +840,12 @@ tbody tr:last-child td {
   align-self: flex-start;
 }
 
+.report-child-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 /* ---------- Portal children ---------- */
 
 .child-hero {

@@ -181,13 +181,19 @@ export default function Parents() {
           .join(', ')
 
   function pickerStudents() {
-    if (formSearch.trim() === '') return []
     const byId = {}
     if (editing) {
       for (const s of childMap[editing.parent_id] || []) byId[s.student_id] = s
     }
     for (const s of formResults) if (!byId[s.student_id]) byId[s.student_id] = s
-    return Object.values(byId).filter((s) => s.active !== false)
+    let list = Object.values(byId).filter((s) => s.active !== false)
+    const term = formSearch.trim().toLowerCase()
+    if (term) {
+      list = list.filter((s) =>
+        `${s.first_name} ${s.last_name}`.toLowerCase().includes(term)
+      )
+    }
+    return list
   }
 
   return (
@@ -259,7 +265,23 @@ export default function Parents() {
         />
         <div className="roster">
           {formSearch.trim() === '' ? (
-            <p className="muted">Type a student's name to attach children.</p>
+            pickerStudents().length === 0 ? (
+              <p className="muted">No linked children yet — type a student's name to attach them.</p>
+            ) : (
+              <>
+                <p className="muted">Currently linked children — type to search the whole school.</p>
+                {pickerStudents().map((s) => (
+                  <label key={s.student_id} className="check">
+                    <input
+                      type="checkbox"
+                      checked={form.student_ids.includes(s.student_id)}
+                      onChange={() => toggleStudent(s.student_id)}
+                    />
+                    {s.first_name} {s.last_name} ({s.grade_level})
+                  </label>
+                ))}
+              </>
+            )
           ) : pickerBusy && pickerStudents().length === 0 ? (
             <p className="muted">Searching…</p>
           ) : pickerStudents().length === 0 ? (

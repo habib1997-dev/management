@@ -124,16 +124,20 @@ def get_parent_portal(
     db: Session = Depends(get_db),
     user: User = Depends(parent_only),
 ) -> ParentPortal:
+    try:
+        requested_id = uuid.UUID(str(parent_id).strip())
+    except ValueError:
+        requested_id = None
+    if user.parent_id is None or requested_id != user.parent_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view your own portal",
+        )
     parent = parent_service.get_parent_with_children(db, parent_id)
     if not parent.status:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Parent account is deactivated",
-        )
-    if user.parent_id is None or user.parent_id != parent.parent_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only view your own portal",
         )
     course_ids = {
         *(a.course_id for student in parent.students for a in student.attendance_records),
