@@ -8,7 +8,8 @@ Environment meanings (enforced in :meth:`Settings.validate`):
   guards). The fallback values (SQLite, `localhost` hosts, dev SECRET_KEY) are
   allowed.
 - ``APP_ENV=prod``            Production. Strict. Requires ``DATABASE_URL`` to
-  start with ``postgresql://`` (driver suffix like ``+psycopg`` accepted),
+  start with ``postgresql://`` (a bare ``postgresql://`` is automatically
+  mapped onto the psycopg3 driver as ``postgresql+psycopg://``),
   ``ALLOWED_HOSTS`` set explicitly, and an explicit non-default ``SECRET_KEY``
   of at least 32 characters.
 - ``APP_ENV=production``      Alias for ``prod`` (normalized at load time).
@@ -35,11 +36,29 @@ APP_ENV_ALIASES = {"production": "prod"}
 POSTGRES_RE = r"^postgresql(?:[+][\w-]+)?://"
 
 
+def _normalize_database_url(url: str) -> str:
+    """Rewrite a bare ``postgresql://`` URL onto the psycopg3 driver.
+
+    Neon (and other hosts) hand out connection strings that start with plain
+    ``postgresql://``.  Without a ``+driver`` suffix SQLAlchemy would silently
+    pick the psycopg2 dialect, which is NOT installed — the first database
+    query would crash with ``ModuleNotFoundError: psycopg2``.  This helper
+    maps the bare form to ``postgresql+psycopg://`` so paste-in-string deploy
+    "just works".  Non-PostgreSQL URLs (SQLite etc.) and URLs that already
+    carry a driver suffix are untouched.
+    """
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
 class Settings:
     """Runtime settings loaded from the environment."""
 
     def __init__(self) -> None:
-        self.database_url: str = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+        self.database_url: str = _normalize_database_url(
+            os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+        )
         self._database_url_explicit: bool = os.getenv("DATABASE_URL") is not None
 
         self._app_env_explicit: bool = os.getenv("APP_ENV") is not None

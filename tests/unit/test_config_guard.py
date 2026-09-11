@@ -125,7 +125,7 @@ def test_non_default_db_with_app_env_dev_passes(monkeypatch):
 
     s = Settings()
     assert s.app_env == "dev"
-    assert s.database_url.startswith("postgresql://")
+    assert s.database_url.startswith("postgresql+psycopg://")
     s.validate()
 
 
@@ -150,3 +150,29 @@ def test_default_db_ignores_app_env_requirement(monkeypatch):
     monkeypatch.delenv("APP_ENV", raising=False)
 
     Settings().validate()  # default URL is allowed without APP_ENV
+
+
+def test_bare_postgres_url_normalizes_to_psycopg3(monkeypatch):
+    _valid_prod(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user@localhost:5432/db")
+
+    s = Settings()
+    assert s.database_url == "postgresql+psycopg://user@localhost:5432/db"
+    s.validate()
+
+
+def test_driver_suffixed_url_is_left_alone(monkeypatch):
+    _valid_prod(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://user@localhost:5432/db")
+
+    s = Settings()
+    assert s.database_url == "postgresql+psycopg://user@localhost:5432/db"
+    s.validate()
+
+
+def test_sqlite_url_is_left_alone(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    monkeypatch.delenv("APP_ENV", raising=False)
+
+    s = Settings()
+    assert s.database_url == DEFAULT_DATABASE_URL

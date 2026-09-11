@@ -23,7 +23,10 @@ future.
    ```
    postgresql://neondb_owner:xxxx@ep-xxxx.us-east-2.aws.neon.tech/neondb?sslmode=require
    ```
-3. Keep this string — you'll paste it into Render as `DATABASE_URL`.
+3. Keep this string — you'll paste it into Render as `DATABASE_URL`.  Paste it
+   **exactly as Neon gives it**: `postgresql://…` gets auto-mapped to the
+   psycopg3 driver at startup (`config._normalize_database_url`), so no manual
+   `+psycopg` edit is needed.
 
 ---
 
