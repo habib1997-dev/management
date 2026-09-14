@@ -1,0 +1,221 @@
+{
+    "qualityGate":  {
+                        "status":  "OK",
+                        "conditions":  [
+                                           {
+                                               "status":  "OK",
+                                               "metricKey":  "new_duplicated_lines_density",
+                                               "comparator":  "GT",
+                                               "errorThreshold":  "3",
+                                               "actualValue":  "1.76211"
+                                           },
+                                           {
+                                               "status":  "OK",
+                                               "metricKey":  "new_violations",
+                                               "comparator":  "GT",
+                                               "errorThreshold":  "0",
+                                               "actualValue":  "0"
+                                           }
+                                       ],
+                        "ignoredConditions":  false,
+                        "period":  {
+                                       "mode":  "PREVIOUS_VERSION",
+                                       "date":  "2026-09-13T23:19:17+0500"
+                                   },
+                        "caycStatus":  "non-compliant"
+                    },
+    "projectKey":  "management-frontend",
+    "measures":  [
+                     {
+                         "metric":  "coverage",
+                         "value":  "0.0",
+                         "bestValue":  false
+                     },
+                     {
+                         "metric":  "reliability_rating",
+                         "value":  "1.0",
+                         "bestValue":  true
+                     },
+                     {
+                         "metric":  "code_smells",
+                         "value":  "0",
+                         "bestValue":  true
+                     },
+                     {
+                         "metric":  "duplicated_lines_density",
+                         "value":  "5.9",
+                         "bestValue":  false
+                     },
+                     {
+                         "metric":  "security_rating",
+                         "value":  "1.0",
+                         "bestValue":  true
+                     },
+                     {
+                         "metric":  "new_coverage",
+                         "period":  {
+                                        "index":  1,
+                                        "value":  "0.0",
+                                        "bestValue":  false
+                                    }
+                     },
+                     {
+                         "metric":  "statements",
+                         "value":  "884"
+                     },
+                     {
+                         "metric":  "security_hotspots",
+                         "value":  "0",
+                         "bestValue":  true
+                     },
+                     {
+                         "metric":  "sqale_rating",
+                         "value":  "1.0",
+                         "bestValue":  true
+                     },
+                     {
+                         "metric":  "bugs",
+                         "value":  "0",
+                         "bestValue":  true
+                     },
+                     {
+                         "metric":  "comment_lines",
+                         "value":  "23"
+                     },
+                     {
+                         "metric":  "cognitive_complexity",
+                         "value":  "265",
+                         "bestValue":  false
+                     },
+                     {
+                         "metric":  "ncloc",
+                         "value":  "3413"
+                     },
+                     {
+                         "metric":  "vulnerabilities",
+                         "value":  "0",
+                         "bestValue":  true
+                     },
+                     {
+                         "metric":  "lines",
+                         "value":  "3725"
+                     }
+                 ],
+    "issueFacets":  [
+                        {
+                            "property":  "severities",
+                            "values":  [
+                                           {
+                                               "val":  "INFO",
+                                               "count":  0
+                                           },
+                                           {
+                                               "val":  "MINOR",
+                                               "count":  0
+                                           },
+                                           {
+                                               "val":  "MAJOR",
+                                               "count":  0
+                                           },
+                                           {
+                                               "val":  "CRITICAL",
+                                               "count":  0
+                                           },
+                                           {
+                                               "val":  "BLOCKER",
+                                               "count":  0
+                                           }
+                                       ]
+                        },
+                        {
+                            "property":  "types",
+                            "values":  [
+                                           {
+                                               "val":  "CODE_SMELL",
+                                               "count":  0
+                                           },
+                                           {
+                                               "val":  "BUG",
+                                               "count":  0
+                                           },
+                                           {
+                                               "val":  "VULNERABILITY",
+                                               "count":  0
+                                           }
+                                       ]
+                        }
+                    ],
+    "recentAnalyses":  [
+                           {
+                               "key":  "2979b06f-af29-4238-924e-37fe5f11a552",
+                               "date":  "2026-09-14T07:35:02+0500",
+                               "events":  [
+                                              {
+                                                  "key":  "705d3249-68d1-4cc8-86a4-2666f5aa609e",
+                                                  "category":  "QUALITY_GATE",
+                                                  "name":  "Passed",
+                                                  "description":  ""
+                                              },
+                                              {
+                                                  "key":  "37211eba-9e04-42dd-9032-8b27ddb292bb",
+                                                  "category":  "VERSION",
+                                                  "name":  "0.1.0"
+                                              }
+                                          ],
+                               "projectVersion":  "0.1.0",
+                               "manualNewCodePeriodBaseline":  false,
+                               "revision":  "8784dd1fbe7c2047f11c5b6ad8026c5d17da817e",
+                               "detectedCI":  "undetected"
+                           },
+                           {
+                               "key":  "a8a4bbfc-f999-4d32-817a-5afed498596b",
+                               "date":  "2026-09-14T00:29:36+0500",
+                               "events":  [
+
+                                          ],
+                               "projectVersion":  "0.1.0",
+                               "manualNewCodePeriodBaseline":  false,
+                               "revision":  "8784dd1fbe7c2047f11c5b6ad8026c5d17da817e",
+                               "detectedCI":  "undetected"
+                           },
+                           {
+                               "key":  "3ec53e70-67de-4fb4-b365-602406ee847e",
+                               "date":  "2026-09-14T00:09:00+0500",
+                               "events":  [
+
+                                          ],
+                               "projectVersion":  "0.1.0",
+                               "manualNewCodePeriodBaseline":  false,
+                               "revision":  "8784dd1fbe7c2047f11c5b6ad8026c5d17da817e",
+                               "detectedCI":  "undetected"
+                           },
+                           {
+                               "key":  "4eb30cf1-71a8-40ad-8873-6afb2135136b",
+                               "date":  "2026-09-14T00:00:18+0500",
+                               "events":  [
+
+                                          ],
+                               "projectVersion":  "0.1.0",
+                               "manualNewCodePeriodBaseline":  false,
+                               "revision":  "8784dd1fbe7c2047f11c5b6ad8026c5d17da817e",
+                               "detectedCI":  "undetected"
+                           },
+                           {
+                               "key":  "f18dd47c-03f5-43d6-92d1-c3e00d57458e",
+                               "date":  "2026-09-13T23:58:08+0500",
+                               "events":  [
+                                              {
+                                                  "key":  "1b0d25a0-776f-49b3-be65-3aaf3f8ce9b4",
+                                                  "category":  "QUALITY_GATE",
+                                                  "name":  "Failed",
+                                                  "description":  "Coverage on New Code \u003c 80"
+                                              }
+                                          ],
+                               "projectVersion":  "0.1.0",
+                               "manualNewCodePeriodBaseline":  false,
+                               "revision":  "8784dd1fbe7c2047f11c5b6ad8026c5d17da817e",
+                               "detectedCI":  "undetected"
+                           }
+                       ],
+    "issuesTotal":  0
+}
