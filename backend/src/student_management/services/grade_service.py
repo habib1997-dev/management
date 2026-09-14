@@ -47,7 +47,7 @@ def _validate_student_for_course(db: Session, student_id, course: Course) -> Non
 
 
 def record_grade(
-    db: Session, payload: GradeCreate, recorded_by: uuid.UUID | None
+    db: Session, payload: GradeCreate, _recorded_by: uuid.UUID | None
 ) -> Grade:
     course = db.get(Course, payload.course_id)
     if course is None:

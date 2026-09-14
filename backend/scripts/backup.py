@@ -184,7 +184,57 @@ def list_backups() -> list[Path]:
     return sorted(BACKUPS_DIR.glob("student_management_*"), reverse=True)
 
 
-def main(argv: list[str] | None = None) -> int:
+def _handle_list() -> None:
+    found = list_backups()
+    if not found:
+        print("No backups found in backups/.")
+        return
+    for item in found:
+        print(item.name)
+
+
+def _handle_restore(args: argparse.Namespace, db_url: str, suffix: str) -> int:
+    parser = _build_parser()
+    if args.file is None or not args.confirm:
+        parser.error("--restore requires both --file <path> and --confirm.")
+    if is_postgres(db_url) and not args.maintenance:
+        parser.error(
+            "--restore on PostgreSQL requires --maintenance. Stop the live web "
+            "service first (the app must not be running while the database is "
+            "restored), then pass --maintenance to acknowledge that you have."
+        )
+    if not args.file.is_file():
+        parser.error(f"Backup file not found: {args.file}")
+    pre = BACKUPS_DIR / f"pre_restore_{_timestamp()}{suffix}"
+    print("Creating a pre-restore snapshot of the CURRENT data ...")
+    backup_to_file(db_url, pre)
+    print(f"  -> {pre.name}")
+    print(f"Restoring from {args.file} ...")
+    restore_from_file(db_url, args.file)
+    print("Restore complete.")
+    return 0
+
+
+def _handle_backup(db_url: str, suffix: str) -> int:
+    out = BACKUPS_DIR / f"student_management_{_timestamp()}{suffix}"
+    try:
+        backup_to_file(db_url, out)
+    except (sqlite3.Error, subprocess.CalledProcessError) as exc:
+        out.unlink(missing_ok=True)
+        print(f"Backup failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"Backup written to {out}")
+
+    # Reminder for real deployments, where a local backup is not enough.
+    if not is_sqlite(db_url):
+        print(
+            "Deployment note: store this file encrypted and off-server (e.g. an "
+            "object store / vault) - never inside the web server's public files."
+        )
+    return 0
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Online database backup/restore. Backups land in backend/backups/ "
@@ -207,57 +257,22 @@ def main(argv: list[str] | None = None) -> int:
         help="(PostgreSQL) acknowledge that the live web service is stopped",
     )
     parser.add_argument("--list", action="store_true", help="list existing backups")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
 
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
     db_url = settings.database_url
     suffix = backup_suffix(db_url)
 
     if args.list:
-        found = list_backups()
-        if not found:
-            print("No backups found in backups/.")
-            return 0
-        for item in found:
-            print(item.name)
+        _handle_list()
         return 0
-
     if args.restore:
-        if args.file is None or not args.confirm:
-            parser.error("--restore requires both --file <path> and --confirm.")
-        if is_postgres(db_url) and not args.maintenance:
-            parser.error(
-                "--restore on PostgreSQL requires --maintenance. Stop the live web "
-                "service first (the app must not be running while the database is "
-                "restored), then pass --maintenance to acknowledge that you have."
-            )
-        if not args.file.is_file():
-            parser.error(f"Backup file not found: {args.file}")
-        pre = BACKUPS_DIR / f"pre_restore_{_timestamp()}{suffix}"
-        print("Creating a pre-restore snapshot of the CURRENT data ...")
-        backup_to_file(db_url, pre)
-        print(f"  -> {pre.name}")
-        print(f"Restoring from {args.file} ...")
-        restore_from_file(db_url, args.file)
-        print("Restore complete.")
-        return 0
-
-    out = BACKUPS_DIR / f"student_management_{_timestamp()}{suffix}"
-    try:
-        backup_to_file(db_url, out)
-    except (sqlite3.Error, subprocess.CalledProcessError) as exc:
-        out.unlink(missing_ok=True)
-        print(f"Backup failed: {exc}", file=sys.stderr)
-        return 1
-    print(f"Backup written to {out}")
-
-    # Reminder for real deployments, where a local backup is not enough.
-    if not is_sqlite(db_url):
-        print(
-            "Deployment note: store this file encrypted and off-server (e.g. an "
-            "object store / vault) - never inside the web server's public files."
-        )
-    return 0
+        return _handle_restore(args, db_url, suffix)
+    return _handle_backup(db_url, suffix)
 
 
 if __name__ == "__main__":

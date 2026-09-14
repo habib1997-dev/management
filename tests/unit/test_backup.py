@@ -27,7 +27,8 @@ def test_sqlite_backup_round_trip_restores_data(tmp_path):
 
     backup_file = tmp_path / "backup.db"
     backup.backup_to_file(f"sqlite:///{db}", backup_file)
-    assert backup_file.is_file() and backup_file.stat().st_size > 0
+    assert backup_file.is_file()
+    assert backup_file.stat().st_size > 0
 
     conn = sqlite3.connect(db)
     conn.execute("DROP TABLE items")

@@ -167,7 +167,7 @@ h3 {
 }
 
 .sidebar nav a:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: #22303d;
   color: #fff;
   transform: translateX(2px);
 }
@@ -230,7 +230,7 @@ h3 {
 }
 
 .sidebar-footer .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: #22303d;
   color: #fff;
 }
 
@@ -508,7 +508,7 @@ tbody tr:last-child td {
 
 .pill-off {
   background: #e9edf0;
-  color: #6b7785;
+  color: #4d5966;
 }
 
 .pill-warn {

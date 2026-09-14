@@ -11,7 +11,7 @@ Usage (from the backend/ directory):
 
 from __future__ import annotations
 
-import sys
+import os
 import time
 from datetime import date, timedelta
 from decimal import Decimal
@@ -34,13 +34,19 @@ from student_management.models.enums import (
 )
 from student_management.security import hash_password
 
-TEACHER_PASSWORD = "teacher123"
-PARENT_PASSWORD = "parent123"
+# These demo logins are PUBLIC sample credentials on purpose (see this script's
+# docstring) so the demo works out of the box; real deployments set their own
+# via the DEMO_* env vars. The trailing suppressions below intentionally keep
+# these sample credentials out of the hard-coded-credential scan findings.
+TEACHER_PASSWORD = os.environ.get("DEMO_TEACHER_PASSWORD", "teacher123")  # NOSONAR
+PARENT_PASSWORD = os.environ.get("DEMO_PARENT_PASSWORD", "parent123")  # NOSONAR
 GUARD_EMAIL = "alice.cohen@schoolsystem.com"
+ALICE_COHEN = "Alice Cohen"
+JANE_SMITH = "Jane Smith"
 
 NEW_TEACHERS = [
     {
-        "name": "Alice Cohen",
+        "name": ALICE_COHEN,
         "email": "alice.cohen@schoolsystem.com",
         "subjects": "Science",
     },
@@ -57,11 +63,11 @@ NEW_TEACHERS = [
 ]
 
 COURSES = [
-    ("[DEMO] Algebra II", "9", "Jane Smith"),
-    ("[DEMO] Biology", "9", "Alice Cohen"),
-    ("[DEMO] Geometry", "10", "Jane Smith"),
+    ("[DEMO] Algebra II", "9", JANE_SMITH),
+    ("[DEMO] Biology", "9", ALICE_COHEN),
+    ("[DEMO] Geometry", "10", JANE_SMITH),
     ("[DEMO] World History", "10", "Bob Thompson"),
-    ("[DEMO] Physics", "11", "Alice Cohen"),
+    ("[DEMO] Physics", "11", ALICE_COHEN),
     ("[DEMO] English Literature", "11", "Priya Sharma"),
 ]
 
@@ -132,7 +138,8 @@ def already_seeded(session) -> bool:
     )
 
 
-def build(session) -> None:
+def _seed_teachers(session) -> tuple[dict[str, Teacher], Teacher]:
+    """Create the NEW_TEACHERS logins and return them keyed by name plus Jane."""
     teachers: dict[str, Teacher] = {}
     for spec in NEW_TEACHERS:
         teacher = Teacher(
@@ -151,9 +158,11 @@ def build(session) -> None:
                 teacher_id=teacher.teacher_id,
             )
         )
+    jane = session.query(Teacher).filter(Teacher.name == JANE_SMITH).first()
+    return teachers, jane
 
-    jane = session.query(Teacher).filter(Teacher.name == "Jane Smith").first()
 
+def _seed_students(session) -> dict[str, list[Student]]:
     students_by_grade: dict[str, list[Student]] = {}
     n = 0
     for grade, roster in STUDENTS.items():
@@ -172,7 +181,15 @@ def build(session) -> None:
             bucket.append(student)
         students_by_grade[grade] = bucket
     session.flush()
+    return students_by_grade
 
+
+def _seed_courses(
+    session,
+    teachers: dict[str, Teacher],
+    jane: Teacher,
+    students_by_grade: dict[str, list[Student]],
+) -> dict[str, Course]:
     courses: dict[str, Course] = {}
     for name, grade, teacher_name in COURSES:
         teacher = teachers.get(teacher_name) or jane
@@ -188,8 +205,10 @@ def build(session) -> None:
         session.add(course)
         session.flush()
         courses[name] = course
+    return courses
 
-    parents: list[Parent] = []
+
+def _seed_parents(session, students_by_grade: dict[str, list[Student]]) -> None:
     for name, email, phone, child_names in NEW_PARENTS:
         parent = Parent(name=name, email=email, phone=phone)
         parent.students = [
@@ -198,7 +217,6 @@ def build(session) -> None:
         ]
         session.add(parent)
         session.flush()
-        parents.append(parent)
         session.add(
             User(
                 email=email,
@@ -208,34 +226,40 @@ def build(session) -> None:
             )
         )
 
-    today = date.today()
-    days = recent_school_days(10, today)
+
+def _attendance_status(day_index: int, student_index: int) -> str:
+    key = day_index + student_index
+    if key % 13 == 0:
+        return AttendanceStatus.ABSENT.value
+    if key % 7 == 0:
+        return AttendanceStatus.LATE.value
+    if key % 11 == 0:
+        return AttendanceStatus.EXCUSED.value
+    return AttendanceStatus.PRESENT.value
+
+
+def _seed_attendance(session, courses: dict[str, Course], days: list[date]) -> None:
     for course in courses.values():
         roster = course.students
         for day_index, day in enumerate(days):
             for student_index, student in enumerate(roster):
-                key = day_index + student_index
-                if key % 13 == 0:
-                    status = AttendanceStatus.ABSENT.value
-                elif key % 7 == 0:
-                    status = AttendanceStatus.LATE.value
-                elif key % 11 == 0:
-                    status = AttendanceStatus.EXCUSED.value
-                else:
-                    status = AttendanceStatus.PRESENT.value
                 session.add(
                     Attendance(
                         student_id=student.student_id,
                         course_id=course.course_id,
                         date=day,
-                        status=status,
+                        status=_attendance_status(day_index, student_index),
                         marked_by=course.teacher_id,
                     )
                 )
 
-    for name, course in courses.items():
+
+def _seed_grades(session, courses: dict[str, Course], today: date) -> None:
+    for course in courses.values():
         roster = course.students
-        for assigned_offset, (assignment_type, assigned_delta, due_delta) in enumerate(ASSIGNMENTS):
+        for assigned_offset, (assignment_type, assigned_delta, due_delta) in enumerate(
+            ASSIGNMENTS
+        ):
             date_assigned = today - timedelta(days=assigned_delta)
             date_due = today - timedelta(days=due_delta)
             for student_index, student in enumerate(roster):
@@ -251,6 +275,18 @@ def build(session) -> None:
                         date_graded=date_due,
                     )
                 )
+
+
+def build(session) -> None:
+    teachers, jane = _seed_teachers(session)
+    students_by_grade = _seed_students(session)
+    courses = _seed_courses(session, teachers, jane, students_by_grade)
+    _seed_parents(session, students_by_grade)
+
+    today = date.today()
+    days = recent_school_days(10, today)
+    _seed_attendance(session, courses, days)
+    _seed_grades(session, courses, today)
 
     student_count = sum(len(v) for v in students_by_grade.values())
     print(f"{student_count} students created")
@@ -292,4 +328,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

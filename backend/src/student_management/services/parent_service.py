@@ -107,51 +107,73 @@ def list_parents(db: Session) -> list[Parent]:
     return db.query(Parent).order_by(Parent.name).all()
 
 
-def update_parent(db: Session, parent: Parent, payload: ParentUpdate) -> Parent:
-    data = payload.model_dump(exclude_unset=True)
+def _parent_email_conflict(db: Session, parent: Parent, email: str) -> bool:
+    return (
+        db.query(Parent)
+        .filter(
+            Parent.parent_id != parent.parent_id,
+            func.lower(Parent.email) == email.lower(),
+        )
+        .first()
+        is not None
+    )
+
+
+def _apply_email_update(
+    db: Session, parent: Parent, data: dict, linked_user: User | None
+) -> tuple[dict, User | None]:
     email = data.get("email")
-    linked_user = user_for_parent(db, parent.parent_id)
-    if email is not None:
-        existing = (
-            db.query(Parent)
-            .filter(
-                Parent.parent_id != parent.parent_id,
-                func.lower(Parent.email) == email.lower(),
-            )
-            .first()
+    if email is None:
+        return data, linked_user
+    if _parent_email_conflict(db, parent, email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A parent with this email already exists",
         )
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A parent with this email already exists",
-            )
-        assert_email_free(
-            db, email, exclude_user_id=linked_user.user_id if linked_user else None
-        )
-        data["email"] = email.lower()
-        if linked_user is not None:
-            linked_user.email = email.lower()
-    if data.get("name"):
-        data["name"] = data["name"].strip()
+    assert_email_free(
+        db, email, exclude_user_id=linked_user.user_id if linked_user else None
+    )
+    data["email"] = email.lower()
+    if linked_user is not None:
+        linked_user.email = email.lower()
+    return data, linked_user
+
+
+def _apply_password_update(
+    db: Session, parent: Parent, data: dict, linked_user: User | None
+) -> None:
     password = data.pop("password", None)
-    if password is not None:
-        new_email = str(data.get("email", parent.email)).lower()
-        user = user_for_parent(db, parent.parent_id)
-        if user is None:
-            user = User(
-                email=new_email,
-                password_hash=hash_password(password),
-                role="parent",
-                parent_id=parent.parent_id,
-            )
-            db.add(user)
-        else:
-            user.password_hash = hash_password(password)
-            user.email = new_email
-            user.auth_version += 1
+    if password is None:
+        return
+    new_email = str(data.get("email", parent.email)).lower()
+    if linked_user is None:
+        linked_user = User(
+            email=new_email,
+            password_hash=hash_password(password),
+            role="parent",
+            parent_id=parent.parent_id,
+        )
+        db.add(linked_user)
+    else:
+        linked_user.password_hash = hash_password(password)
+        linked_user.email = new_email
+        linked_user.auth_version += 1
+
+
+def _apply_fields(parent: Parent, data: dict) -> None:
     for field, value in data.items():
         if value is not None:
             setattr(parent, field, value)
+
+
+def update_parent(db: Session, parent: Parent, payload: ParentUpdate) -> Parent:
+    data = payload.model_dump(exclude_unset=True)
+    linked_user = user_for_parent(db, parent.parent_id)
+    data, linked_user = _apply_email_update(db, parent, data, linked_user)
+    if data.get("name"):
+        data["name"] = data["name"].strip()
+    _apply_password_update(db, parent, data, linked_user)
+    _apply_fields(parent, data)
     flush_or_conflict(db)
     if "status" in data:
         user = user_for_parent(db, parent.parent_id)

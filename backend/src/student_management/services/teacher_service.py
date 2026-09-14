@@ -70,55 +70,77 @@ def list_teachers(db: Session) -> list[Teacher]:
     return db.query(Teacher).order_by(Teacher.name).all()
 
 
-def update_teacher(db: Session, teacher: Teacher, payload: TeacherUpdate) -> Teacher:
-    data = payload.model_dump(exclude_unset=True)
+def _teacher_email_conflict(db: Session, teacher: Teacher, email: str) -> bool:
+    return (
+        db.query(Teacher)
+        .filter(
+            Teacher.teacher_id != teacher.teacher_id,
+            func.lower(Teacher.email) == email.lower(),
+        )
+        .first()
+        is not None
+    )
+
+
+def _apply_email_update(
+    db: Session, teacher: Teacher, data: dict, linked_user: User | None
+) -> tuple[dict, User | None]:
     email = data.get("email")
-    linked_user = user_for_teacher(db, teacher.teacher_id)
-    if email is not None:
-        existing = (
-            db.query(Teacher)
-            .filter(
-                Teacher.teacher_id != teacher.teacher_id,
-                func.lower(Teacher.email) == email.lower(),
-            )
-            .first()
+    if email is None:
+        return data, linked_user
+    if _teacher_email_conflict(db, teacher, email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A teacher with this email already exists",
         )
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A teacher with this email already exists",
-            )
-        assert_email_free(
-            db, email, exclude_user_id=linked_user.user_id if linked_user else None
-        )
-        data["email"] = email.lower()
-        if linked_user is not None:
-            linked_user.email = email.lower()
-    if data.get("name"):
-        data["name"] = data["name"].strip()
-    if "subjects_taught" in data:
-        data["subjects_taught"] = (data["subjects_taught"] or "").strip() or None
+    assert_email_free(
+        db, email, exclude_user_id=linked_user.user_id if linked_user else None
+    )
+    data["email"] = email.lower()
+    if linked_user is not None:
+        linked_user.email = email.lower()
+    return data, linked_user
+
+
+def _apply_password_update(
+    db: Session, teacher: Teacher, data: dict, linked_user: User | None
+) -> None:
     password = data.pop("password", None)
-    if password is not None:
-        user = linked_user or user_for_teacher(db, teacher.teacher_id)
-        new_email = str(data.get("email", teacher.email)).lower()
-        if user is None:
-            user = User(
-                email=new_email,
-                password_hash=hash_password(password),
-                role="teacher",
-                teacher_id=teacher.teacher_id,
-            )
-            db.add(user)
-        else:
-            user.password_hash = hash_password(password)
-            user.email = new_email
-            user.auth_version += 1
+    if password is None:
+        return
+    new_email = str(data.get("email", teacher.email)).lower()
+    if linked_user is None:
+        linked_user = User(
+            email=new_email,
+            password_hash=hash_password(password),
+            role="teacher",
+            teacher_id=teacher.teacher_id,
+        )
+        db.add(linked_user)
+    else:
+        linked_user.password_hash = hash_password(password)
+        linked_user.email = new_email
+        linked_user.auth_version += 1
+
+
+def _apply_fields(teacher: Teacher, data: dict) -> None:
     for field, value in data.items():
         if field == "subjects_taught":
             setattr(teacher, field, data["subjects_taught"])
         elif value is not None:
             setattr(teacher, field, value)
+
+
+def update_teacher(db: Session, teacher: Teacher, payload: TeacherUpdate) -> Teacher:
+    data = payload.model_dump(exclude_unset=True)
+    linked_user = user_for_teacher(db, teacher.teacher_id)
+    data, linked_user = _apply_email_update(db, teacher, data, linked_user)
+    if data.get("name"):
+        data["name"] = data["name"].strip()
+    if "subjects_taught" in data:
+        data["subjects_taught"] = (data["subjects_taught"] or "").strip() or None
+    _apply_password_update(db, teacher, data, linked_user)
+    _apply_fields(teacher, data)
     flush_or_conflict(db)
     if "status" in data:
         user = user_for_teacher(db, teacher.teacher_id)

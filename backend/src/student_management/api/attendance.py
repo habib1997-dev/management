@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/v1", tags=["attendance"])
 staff_only = require_roles("admin", "teacher")
 
 
-@router.post("/attendance", response_model=AttendanceResponse, status_code=201)
+@router.post("/attendance", status_code=201)
 def mark_attendance(
     payload: AttendanceCreate,
     db: Session = Depends(get_db),
@@ -35,7 +35,7 @@ def mark_attendance(
     )
 
 
-@router.get("/attendance/{course_id}", response_model=dict)
+@router.get("/attendance/{course_id}")
 def list_course_attendance(
     course_id: str,
     date: date_type | None = Query(default=None),
@@ -51,7 +51,7 @@ def list_course_attendance(
     }
 
 
-@router.get("/students/{student_id}/attendance", response_model=dict)
+@router.get("/students/{student_id}/attendance")
 def get_student_attendance(
     student_id: str,
     db: Session = Depends(get_db),

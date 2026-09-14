@@ -3,6 +3,7 @@
 import threading
 import time
 from collections import defaultdict, deque
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
@@ -51,11 +52,11 @@ def _clear_failures(key: str) -> None:
         _FAILURES.pop(key, None)
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login")
 def login(
     payload: LoginRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ) -> LoginResponse:
     """Authenticate a user with email/password and return a JWT bearer token.
 

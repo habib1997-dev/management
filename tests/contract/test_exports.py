@@ -78,7 +78,9 @@ def test_grades_export_includes_course_and_student(client, make_auth_headers):
     rows = _parse(resp)
     assert rows[0][4] == "course_name"
     grade_row = [r for r in rows[1:] if r[4] == "Algebra"]
-    assert grade_row and grade_row[0][2] == "Zain" and grade_row[0][5] == "87.50"
+    assert grade_row
+    assert grade_row[0][2] == "Zain"
+    assert grade_row[0][5] == "87.50"
 
 
 def test_csv_neutralizes_formula_injection(client, make_auth_headers):

@@ -13,7 +13,10 @@ from student_management.services.school_profile import (
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 
-@router.get("/brand")
+@router.get(
+    "/brand",
+    responses={500: {"description": "School branding is not configured correctly"}},
+)
 def get_school_brand() -> dict:
     try:
         return get_branding()
@@ -21,7 +24,10 @@ def get_school_brand() -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.get("/brand/logo")
+@router.get(
+    "/brand/logo",
+    responses={404: {"description": "No school logo is configured"}},
+)
 def get_school_logo() -> FileResponse:
     path = logo_path()
     if path is None:

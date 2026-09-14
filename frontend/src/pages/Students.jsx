@@ -15,6 +15,12 @@ const EMPTY_FORM = {
 
 const PAGE_SIZE = 50
 
+function submitLabel(busy, editing) {
+  if (busy) return 'Saving…'
+  if (editing) return 'Save changes'
+  return 'Enroll student'
+}
+
 export default function Students() {
   const [rows, setRows] = useState([])
   const [search, setSearch] = useState('')
@@ -94,7 +100,7 @@ export default function Students() {
     let detail = s
     try {
       const res = await api(`/api/v1/students/${s.student_id}`)
-      if (res && res.student_id) detail = res
+      if (res?.student_id) detail = res
     } catch {
       // fall back to the list row (date field will then be empty)
     }
@@ -137,6 +143,56 @@ export default function Students() {
     }
   }
 
+  let listBody
+  if (loading) {
+    listBody = <p className="muted">Loading…</p>
+  } else if (rows.length === 0) {
+    listBody = <p className="muted">No students found.</p>
+  } else {
+    listBody = (
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Grade</th>
+              <th>Enrolled</th>
+              <th>Status</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => (
+              <tr key={s.student_id}>
+                <td>
+                  <div className="name-cell">
+                    <Avatar name={`${s.first_name} ${s.last_name}`} />
+                    {s.first_name} {s.last_name}
+                  </div>
+                </td>
+                <td>{s.grade_level}</td>
+                <td>{s.enrollment_date}</td>
+                <td>
+                  {s.active ? <span className="pill pill-ok">Active</span> : <span className="pill pill-off">Inactive</span>}
+                </td>
+                <td>{s.email || '—'}</td>
+                <td>{s.phone || '—'}</td>
+                <td>
+                  <button className="btn btn-ghost" onClick={() => startEdit(s)}>
+                    <Pencil size={13} />
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="row space-between" style={{ marginTop: 0 }}>
@@ -160,14 +216,17 @@ export default function Students() {
         <div className="grid2">
           <label>
             First name
+            {' '}
             <input value={form.first_name} onChange={(e) => set('first_name', e.target.value)} required />
           </label>
           <label>
             Last name
+            {' '}
             <input value={form.last_name} onChange={(e) => set('last_name', e.target.value)} required />
           </label>
           <label>
             Date of birth
+            {' '}
             <input
               type="date"
               value={form.date_of_birth}
@@ -177,6 +236,7 @@ export default function Students() {
           </label>
           <label>
             Grade level
+            {' '}
             <input
               value={form.grade_level}
               onChange={(e) => set('grade_level', e.target.value)}
@@ -186,10 +246,12 @@ export default function Students() {
           </label>
           <label>
             Email
+            {' '}
             <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
           </label>
           <label>
             Phone
+            {' '}
             <input value={form.phone} onChange={(e) => set('phone', e.target.value)} />
           </label>
           {editing && (
@@ -199,13 +261,14 @@ export default function Students() {
                 checked={form.active}
                 onChange={(e) => set('active', e.target.checked)}
               />
+              {' '}
               Account active (un-tick to deactivate)
             </label>
           )}
         </div>
         <div className="row">
           <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? 'Saving…' : editing ? 'Save changes' : 'Enroll student'}
+            {submitLabel(busy, editing)}
           </button>
           {editing && (
             <button className="btn" type="button" onClick={resetForm}>
@@ -237,52 +300,7 @@ export default function Students() {
             {total} student(s)
           </span>
         </div>
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : rows.length === 0 ? (
-          <p className="muted">No students found.</p>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Grade</th>
-                  <th>Enrolled</th>
-                  <th>Status</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th />
-                </tr>
-              </thead>
-            <tbody>
-              {rows.map((s) => (
-                <tr key={s.student_id}>
-                  <td>
-                    <div className="name-cell">
-                      <Avatar name={`${s.first_name} ${s.last_name}`} />
-                      {s.first_name} {s.last_name}
-                    </div>
-                  </td>
-                  <td>{s.grade_level}</td>
-                  <td>{s.enrollment_date}</td>
-                  <td>
-                    {s.active ? <span className="pill pill-ok">Active</span> : <span className="pill pill-off">Inactive</span>}
-                  </td>
-                  <td>{s.email || '—'}</td>
-                  <td>{s.phone || '—'}</td>
-                  <td>
-                    <button className="btn btn-ghost" onClick={() => startEdit(s)}>
-                      <Pencil size={13} />
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
+        {listBody}
         {total > PAGE_SIZE && (
           <div className="row pagination">
             <button className="btn" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading}>

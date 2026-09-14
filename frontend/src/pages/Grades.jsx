@@ -153,7 +153,7 @@ export default function Grades() {
   }
 
   function editField(field, value) {
-    setEditDraft((d) => ({ ...(d || {}), [field]: value }))
+    setEditDraft((d) => ({ ...d, [field]: value }))
   }
 
   function studentName(g) {
@@ -203,6 +203,174 @@ export default function Grades() {
     )
   }
 
+  let gradeFormBody
+  if (loading) {
+    gradeFormBody = <p className="muted">Loading…</p>
+  } else if (students.length === 0) {
+    gradeFormBody = <p className="muted">No students in this course.</p>
+  } else {
+    gradeFormBody = (
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Parent contact</th>
+              <th>Grade (0–100)</th>
+              <th>Type</th>
+              <th>Assigned</th>
+            <th>Due</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {students.map((s) => {
+            const ent = addEntries[s.student_id] || blankEntry()
+            return (
+              <tr key={s.student_id}>
+                <td>
+                  <div className="name-cell">
+                    <Avatar name={`${s.first_name} ${s.last_name}`} />
+                    {s.first_name} {s.last_name}
+                  </div>
+                </td>
+                <td className="parent-contact">
+                  {(parents[s.student_id] || []).length === 0 ? (
+                    '—'
+                  ) : (
+                    parents[s.student_id].map((p) => (
+                      <div key={p.parent_id} className="parent-line">
+                        <span className="parent-name">{p.name}</span>
+                        <span className="muted">
+                          {p.phone}
+                          {p.email ? ` · ${p.email}` : ''}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={ent.grade_value}
+                    onChange={(e) => setAddField(s.student_id, 'grade_value', e.target.value)}
+                    placeholder="0–100"
+                  />
+                </td>
+                <td>{typeSelect(ent.assignment_type, (e) => setAddField(s.student_id, 'assignment_type', e.target.value))}</td>
+                <td>
+                  <input type="date" value={ent.date_assigned} onChange={(e) => setAddField(s.student_id, 'date_assigned', e.target.value)} />
+                </td>
+                <td>
+                  <input type="date" value={ent.date_due} onChange={(e) => setAddField(s.student_id, 'date_due', e.target.value)} />
+                </td>
+                <td>
+                  <button className="btn btn-ghost" onClick={() => addGrade(s)} disabled={busy || !ent.grade_value}>
+                    Record
+                  </button>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      </div>
+    )
+  }
+
+  let recordedBody
+  if (loading) {
+    recordedBody = <p className="muted">Loading…</p>
+  } else if (recorded.length === 0) {
+    recordedBody = <p className="muted">No grades recorded yet.</p>
+  } else {
+    recordedBody = (
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Grade</th>
+              <th>Type</th>
+              <th>Assigned</th>
+              <th>Due</th>
+              <th>Graded</th>
+              <th />
+            </tr>
+          </thead>
+        <tbody>
+          {recorded.map((g) =>
+            editingId === g.grade_id ? (
+              <tr key={g.grade_id}>
+                <td>
+                  <div className="name-cell">
+                    <Avatar name={studentName(g)} />
+                    {studentName(g)}
+                  </div>
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={editDraft?.grade_value || ''}
+                    onChange={(e) => editField('grade_value', e.target.value)}
+                    placeholder="0–100"
+                  />
+                </td>
+                <td>{typeSelect(editDraft?.assignment_type || 'homework', (e) => editField('assignment_type', e.target.value))}</td>
+                <td>
+                  <input type="date" value={editDraft?.date_assigned || ''} onChange={(e) => editField('date_assigned', e.target.value)} />
+                </td>
+                <td>
+                  <input type="date" value={editDraft?.date_due || ''} onChange={(e) => editField('date_due', e.target.value)} />
+                </td>
+                <td>{g.date_graded}</td>
+                <td>
+                  <button className="btn btn-ghost" onClick={() => saveEdit(g)} disabled={busy || !editDraft?.grade_value}>
+                    <Save size={13} />
+                    Save
+                  </button>{' '}
+                  <button className="btn btn-ghost" onClick={cancelEdit}>
+                    <X size={13} />
+                    Cancel
+                  </button>
+                </td>
+              </tr>
+            ) : (
+              <tr key={g.grade_id}>
+                <td>
+                  <div className="name-cell">
+                    <Avatar name={studentName(g)} />
+                    {studentName(g)}
+                  </div>
+                </td>
+                <td>
+                  <span className="pill pill-score">{g.grade_value}</span>
+                </td>
+                <td>{g.assignment_type || '—'}</td>
+                <td>{g.date_assigned}</td>
+                <td>{g.date_due}</td>
+                <td>{g.date_graded}</td>
+                <td>
+                  <button className="btn btn-ghost" onClick={() => startEdit(g)} disabled={busy}>
+                    <Pencil size={13} />
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            )
+          )}
+        </tbody>
+      </table>
+      </div>
+    )
+  }
+
   return (
     <div>
       <h1>Grades</h1>
@@ -212,6 +380,7 @@ export default function Grades() {
       <div className="form-panel">
         <label>
           Course
+          {' '}
           <select value={courseId} onChange={(e) => setCourseId(e.target.value)} required>
             <option value="">Select a course…</option>
             {courses.map((c) => (
@@ -225,170 +394,12 @@ export default function Grades() {
 
       <div className="form-panel">
         <h2>Record a new grade</h2>
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : students.length === 0 ? (
-          <p className="muted">No students in this course.</p>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Parent contact</th>
-                  <th>Grade (0–100)</th>
-                  <th>Type</th>
-                  <th>Assigned</th>
-                <th>Due</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s) => {
-                const ent = addEntries[s.student_id] || blankEntry()
-                return (
-                  <tr key={s.student_id}>
-                    <td>
-                      <div className="name-cell">
-                        <Avatar name={`${s.first_name} ${s.last_name}`} />
-                        {s.first_name} {s.last_name}
-                      </div>
-                    </td>
-                    <td className="parent-contact">
-                      {(parents[s.student_id] || []).length === 0 ? (
-                        '—'
-                      ) : (
-                        parents[s.student_id].map((p) => (
-                          <div key={p.parent_id} className="parent-line">
-                            <span className="parent-name">{p.name}</span>
-                            <span className="muted">
-                              {p.phone}
-                              {p.email ? ` · ${p.email}` : ''}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.5"
-                        value={ent.grade_value}
-                        onChange={(e) => setAddField(s.student_id, 'grade_value', e.target.value)}
-                        placeholder="0–100"
-                      />
-                    </td>
-                    <td>{typeSelect(ent.assignment_type, (e) => setAddField(s.student_id, 'assignment_type', e.target.value))}</td>
-                    <td>
-                      <input type="date" value={ent.date_assigned} onChange={(e) => setAddField(s.student_id, 'date_assigned', e.target.value)} />
-                    </td>
-                    <td>
-                      <input type="date" value={ent.date_due} onChange={(e) => setAddField(s.student_id, 'date_due', e.target.value)} />
-                    </td>
-                    <td>
-                      <button className="btn btn-ghost" onClick={() => addGrade(s)} disabled={busy || !ent.grade_value}>
-                        Record
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          </div>
-        )}
+        {gradeFormBody}
       </div>
 
       <div className="card">
         <h2>Recorded grades for this course</h2>
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : recorded.length === 0 ? (
-          <p className="muted">No grades recorded yet.</p>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Grade</th>
-                  <th>Type</th>
-                  <th>Assigned</th>
-                  <th>Due</th>
-                  <th>Graded</th>
-                  <th />
-                </tr>
-              </thead>
-            <tbody>
-              {recorded.map((g) =>
-                editingId === g.grade_id ? (
-                  <tr key={g.grade_id}>
-                    <td>
-                      <div className="name-cell">
-                        <Avatar name={studentName(g)} />
-                        {studentName(g)}
-                      </div>
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.5"
-                        value={editDraft?.grade_value || ''}
-                        onChange={(e) => editField('grade_value', e.target.value)}
-                        placeholder="0–100"
-                      />
-                    </td>
-                    <td>{typeSelect(editDraft?.assignment_type || 'homework', (e) => editField('assignment_type', e.target.value))}</td>
-                    <td>
-                      <input type="date" value={editDraft?.date_assigned || ''} onChange={(e) => editField('date_assigned', e.target.value)} />
-                    </td>
-                    <td>
-                      <input type="date" value={editDraft?.date_due || ''} onChange={(e) => editField('date_due', e.target.value)} />
-                    </td>
-                    <td>{g.date_graded}</td>
-                    <td>
-                      <button className="btn btn-ghost" onClick={() => saveEdit(g)} disabled={busy || !editDraft?.grade_value}>
-                        <Save size={13} />
-                        Save
-                      </button>{' '}
-                      <button className="btn btn-ghost" onClick={cancelEdit}>
-                        <X size={13} />
-                        Cancel
-                      </button>
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={g.grade_id}>
-                    <td>
-                      <div className="name-cell">
-                        <Avatar name={studentName(g)} />
-                        {studentName(g)}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="pill pill-score">{g.grade_value}</span>
-                    </td>
-                    <td>{g.assignment_type || '—'}</td>
-                    <td>{g.date_assigned}</td>
-                    <td>{g.date_due}</td>
-                    <td>{g.date_graded}</td>
-                    <td>
-                      <button className="btn btn-ghost" onClick={() => startEdit(g)} disabled={busy}>
-                        <Pencil size={13} />
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                )
-              )}
-            </tbody>
-          </table>
-          </div>
-        )}
+        {recordedBody}
       </div>
     </div>
   )

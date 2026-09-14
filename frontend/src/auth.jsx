@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { api, clearAuth, getStoredUser, getToken, saveAuth } from './api.js'
 
 const AuthContext = createContext(null)
@@ -7,7 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(getStoredUser())
   const [token, setToken] = useState(getToken())
 
-  async function login(email, password) {
+  const login = useCallback(async (email, password) => {
     const data = await api('/api/v1/auth/login', {
       method: 'POST',
       body: { email, password },
@@ -22,21 +22,24 @@ export function AuthProvider({ children }) {
     })
     setToken(data.access_token)
     return data.role
-  }
+  }, [])
 
-  function logout() {
+  const logout = useCallback(() => {
     clearAuth()
     setUser(null)
     setToken(null)
-  }
+  }, [])
 
-  const value = {
-    user,
-    token,
-    isAuthenticated: Boolean(token),
-    login,
-    logout,
-  }
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      isAuthenticated: Boolean(token),
+      login,
+      logout,
+    }),
+    [user, token, login, logout]
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

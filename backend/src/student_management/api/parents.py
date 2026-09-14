@@ -31,7 +31,7 @@ admin_only = require_roles("admin")
 parent_only = require_roles("parent")
 
 
-@router.get("/parents", response_model=ParentListResponse)
+@router.get("/parents")
 def list_parents(
     db: Session = Depends(get_db),
     _admin: User = Depends(admin_only),
@@ -43,7 +43,7 @@ def list_parents(
     )
 
 
-@router.post("/parents", response_model=ParentResponse, status_code=201)
+@router.post("/parents", status_code=201)
 def create_parent(
     payload: ParentCreate,
     db: Session = Depends(get_db),
@@ -56,7 +56,7 @@ def create_parent(
     )
 
 
-@router.put("/parents/{parent_id}", response_model=ParentResponse)
+@router.put("/parents/{parent_id}")
 def update_parent(
     parent_id: str,
     payload: ParentUpdate,
@@ -72,7 +72,7 @@ def update_parent(
     )
 
 
-@router.get("/parents/{parent_id}/students", response_model=dict)
+@router.get("/parents/{parent_id}/students")
 def list_parent_students(
     parent_id: str,
     db: Session = Depends(get_db),
@@ -85,7 +85,7 @@ def list_parent_students(
     }
 
 
-@router.put("/parents/{parent_id}/students", response_model=dict)
+@router.put("/parents/{parent_id}/students")
 def update_parent_students(
     parent_id: str,
     payload: ParentStudentsUpdate,
@@ -103,7 +103,7 @@ def update_parent_students(
 
 
 @router.post(
-    "/parents/{parent_id}/account", response_model=AccountResponse, status_code=201
+    "/parents/{parent_id}/account", status_code=201
 )
 def create_parent_account(
     parent_id: str,
@@ -118,7 +118,7 @@ def create_parent_account(
     )
 
 
-@router.get("/parents/{parent_id}/portal", response_model=ParentPortal)
+@router.get("/parents/{parent_id}/portal")
 def get_parent_portal(
     parent_id: str,
     db: Session = Depends(get_db),

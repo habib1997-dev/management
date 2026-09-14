@@ -114,6 +114,65 @@ export default function Attendance() {
     })
   }
 
+  let rosterBody
+  if (loading) {
+    rosterBody = <p className="muted">Loading students…</p>
+  } else if (students.length === 0) {
+    rosterBody = <p className="muted">No students in this course.</p>
+  } else {
+    rosterBody = (
+      <table>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Parent contact</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {students.map((s) => (
+            <tr key={s.student_id}>
+              <td>
+                <div className="name-cell">
+                  <Avatar name={`${s.first_name} ${s.last_name}`} />
+                  {s.first_name} {s.last_name}
+                </div>
+              </td>
+              <td className="parent-contact">
+                {(parents[s.student_id] || []).length === 0 ? (
+                  '—'
+                ) : (
+                  parents[s.student_id].map((p) => (
+                    <div key={p.parent_id} className="parent-line">
+                      <span className="parent-name">{p.name}</span>
+                      <span className="muted">
+                        {p.phone}
+                        {p.email ? ` · ${p.email}` : ''}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </td>
+              <td>
+                <select
+                  value={statuses[s.student_id] || ''}
+                  onChange={(e) => setStatus(s.student_id, e.target.value)}
+                >
+                  <option value="">—</option>
+                  {STATUS_OPTIONS.map((st) => (
+                    <option key={st} value={st}>
+                      {st}
+                    </option>
+                  ))}
+                </select>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
   return (
     <div>
       <h1>Attendance</h1>
@@ -124,6 +183,7 @@ export default function Attendance() {
         <div className="grid2">
           <label>
             Course
+            {' '}
             <select value={courseId} onChange={(e) => setCourseId(e.target.value)} required>
               <option value="">Select a course…</option>
               {courses.map((c) => (
@@ -135,65 +195,12 @@ export default function Attendance() {
           </label>
           <label>
             Date
+            {' '}
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </label>
         </div>
 
-        {loading ? (
-          <p className="muted">Loading students…</p>
-        ) : students.length === 0 ? (
-          <p className="muted">No students in this course.</p>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Parent contact</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s) => (
-                <tr key={s.student_id}>
-                  <td>
-                    <div className="name-cell">
-                      <Avatar name={`${s.first_name} ${s.last_name}`} />
-                      {s.first_name} {s.last_name}
-                    </div>
-                  </td>
-                  <td className="parent-contact">
-                    {(parents[s.student_id] || []).length === 0 ? (
-                      '—'
-                    ) : (
-                      parents[s.student_id].map((p) => (
-                        <div key={p.parent_id} className="parent-line">
-                          <span className="parent-name">{p.name}</span>
-                          <span className="muted">
-                            {p.phone}
-                            {p.email ? ` · ${p.email}` : ''}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </td>
-                  <td>
-                    <select
-                      value={statuses[s.student_id] || ''}
-                      onChange={(e) => setStatus(s.student_id, e.target.value)}
-                    >
-                      <option value="">—</option>
-                      {STATUS_OPTIONS.map((st) => (
-                        <option key={st} value={st}>
-                          {st}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {rosterBody}
 
         <div className="row">
           <button className="btn btn-primary" type="submit" disabled={busy || students.length === 0}>

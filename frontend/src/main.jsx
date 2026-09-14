@@ -12,21 +12,17 @@ import '@fontsource/plus-jakarta-sans/600.css'
 import '@fontsource/plus-jakarta-sans/700.css'
 import './styles.css'
 
-async function boot() {
-  // School branding is fetched before first paint; if the backend is down the
-  // built-in defaults still render, so the app is never blank.
-  const brand = await fetchBrand()
-  applyBrand(brand)
+// School branding is fetched before first paint; if the backend is down the
+// built-in defaults still render, so the app is never blank.
+const brand = await fetchBrand()
+applyBrand(brand)
 
-  ReactDOM.createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
-    </React.StrictMode>
-  )
-}
-
-boot()
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>
+)

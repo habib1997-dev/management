@@ -12,7 +12,7 @@ from student_management.models import User
 from student_management.security import create_access_token, hash_password
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session() -> Session:
     # StaticPool keeps ONE shared connection across threads so the TestClient's
     # worker thread sees the same in-memory database.
@@ -31,7 +31,7 @@ def db_session() -> Session:
         Base.metadata.drop_all(engine)
 
 
-@pytest.fixture()
+@pytest.fixture
 def make_auth_headers(db_session: Session):
     """Factory producing Authorization headers for a given role/email."""
 
@@ -59,7 +59,7 @@ def make_auth_headers(db_session: Session):
     return _make
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(db_session: Session) -> TestClient:
     def override_get_db():
         yield db_session

@@ -38,8 +38,9 @@ def test_prod_requires_postgres_database_url(monkeypatch):
     monkeypatch.setenv("ALLOWED_HOSTS", "schoolsystem.com")
     monkeypatch.setenv("SECRET_KEY", PROD_SECRET_KEY)
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="postgresql"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_prod_requires_explicit_allowed_hosts(monkeypatch):
@@ -48,32 +49,36 @@ def test_prod_requires_explicit_allowed_hosts(monkeypatch):
     monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
     monkeypatch.setenv("SECRET_KEY", PROD_SECRET_KEY)
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="ALLOWED_HOSTS"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_prod_requires_explicit_secret_key(monkeypatch):
     _valid_prod(monkeypatch)
     monkeypatch.delenv("SECRET_KEY", raising=False)
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="SECRET_KEY"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_prod_rejects_dev_fallback_secret_key(monkeypatch):
     _valid_prod(monkeypatch)
     monkeypatch.setenv("SECRET_KEY", DEV_SECRET_KEY)
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="SECRET_KEY"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_prod_rejects_short_secret_key(monkeypatch):
     _valid_prod(monkeypatch)
     monkeypatch.setenv("SECRET_KEY", "too-short")
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="SECRET_KEY"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_prod_accepts_valid_configuration(monkeypatch):
@@ -106,16 +111,18 @@ def test_unknown_environment_is_rejected(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", DEFAULT_DATABASE_URL)
     monkeypatch.setenv("APP_ENV", "staging")
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="APP_ENV"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_non_default_db_without_app_env_is_error(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./custom.db")
     monkeypatch.delenv("APP_ENV", raising=False)
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="APP_ENV"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_non_default_db_with_app_env_dev_passes(monkeypatch):
@@ -133,16 +140,18 @@ def test_prod_rejects_wildcard_anywhere_in_allowed_hosts(monkeypatch):
     _valid_prod(monkeypatch)
     monkeypatch.setenv("ALLOWED_HOSTS", "schoolsystem.com,*")
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="ALLOWED_HOSTS"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_prod_rejects_allowed_hosts_as_bare_wildcard(monkeypatch):
     _valid_prod(monkeypatch)
     monkeypatch.setenv("ALLOWED_HOSTS", "*")
 
+    prod_settings = Settings()
     with pytest.raises(RuntimeError, match="ALLOWED_HOSTS"):
-        Settings().validate()
+        prod_settings.validate()
 
 
 def test_default_db_ignores_app_env_requirement(monkeypatch):

@@ -16,6 +16,19 @@ const EMPTY_FORM = {
   max_students: 30,
 }
 
+function studentCheckbox(s, checked, onToggle) {
+  return (
+    <label key={s.student_id} className="check">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onToggle(s.student_id)}
+      />
+      {s.first_name} {s.last_name} ({s.grade_level})
+    </label>
+  )
+}
+
 export default function Courses() {
   const [rows, setRows] = useState([])
   const [teachers, setTeachers] = useState([])
@@ -172,6 +185,74 @@ export default function Courses() {
     return list
   }
 
+  let listBody
+  let pickerContent
+  const rosterList = pickerStudents()
+  if (loading) {
+    listBody = <p className="muted">Loading…</p>
+  } else if (rows.length === 0) {
+    listBody = <p className="muted">No courses found.</p>
+  } else {
+    listBody = (
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Teacher</th>
+              <th>Grade</th>
+              <th>Semester</th>
+              <th>Status</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((c) => (
+              <tr key={c.course_id}>
+                <td>
+                  <div className="name-cell">
+                    <span className="cell-icon">
+                      <BookOpen size={15} />
+                    </span>
+                    {c.name}
+                  </div>
+                </td>
+                <td>{teacherName(c.teacher_id)}</td>
+                <td>{c.grade_level}</td>
+                <td>{c.semester}</td>
+                <td>{coursePill(c.status)}</td>
+                <td>
+                  <button className="btn btn-ghost" onClick={() => openDetail(c.course_id)}>
+                    <Users size={13} />
+                    Roster
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+  if (rosterSearch.trim() === '') {
+    if (rosterList.length === 0) {
+      pickerContent = <p className="muted">No students enrolled yet — type a name to add them.</p>
+    } else {
+      pickerContent = (
+        <>
+          <p className="muted">Current roster — type to search the whole school.</p>
+          {rosterList.map((s) => studentCheckbox(s, roster.includes(s.student_id), toggleStudent))}
+        </>
+      )
+    }
+  } else if (pickerBusy && picker.length === 0) {
+    pickerContent = <p className="muted">Searching…</p>
+  } else if (rosterList.length === 0) {
+    pickerContent = <p className="muted">No students match your search.</p>
+  } else {
+    pickerContent = rosterList.map((s) => studentCheckbox(s, roster.includes(s.student_id), toggleStudent))
+  }
+
   return (
     <div>
       <h1>Courses</h1>
@@ -183,10 +264,12 @@ export default function Courses() {
         <div className="grid2">
           <label>
             Course name
+            {' '}
             <input value={form.name} onChange={(e) => set('name', e.target.value)} required />
           </label>
           <label>
             Teacher
+            {' '}
             <select
               value={form.teacher_id}
               onChange={(e) => set('teacher_id', e.target.value)}
@@ -202,6 +285,7 @@ export default function Courses() {
           </label>
           <label>
             Grade level
+            {' '}
             <input
               value={form.grade_level}
               onChange={(e) => set('grade_level', e.target.value)}
@@ -210,6 +294,7 @@ export default function Courses() {
           </label>
           <label>
             Semester
+            {' '}
             <input
               value={form.semester}
               onChange={(e) => set('semester', e.target.value)}
@@ -219,6 +304,7 @@ export default function Courses() {
           </label>
           <label>
             Max students
+            {' '}
             <input
               type="number"
               min="1"
@@ -235,50 +321,7 @@ export default function Courses() {
       </form>
 
       <div className="card">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : rows.length === 0 ? (
-          <p className="muted">No courses found.</p>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Teacher</th>
-                  <th>Grade</th>
-                  <th>Semester</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-            <tbody>
-              {rows.map((c) => (
-                <tr key={c.course_id}>
-                  <td>
-                    <div className="name-cell">
-                      <span className="cell-icon">
-                        <BookOpen size={15} />
-                      </span>
-                      {c.name}
-                    </div>
-                  </td>
-                  <td>{teacherName(c.teacher_id)}</td>
-                  <td>{c.grade_level}</td>
-                  <td>{c.semester}</td>
-                  <td>{coursePill(c.status)}</td>
-                  <td>
-                    <button className="btn btn-ghost" onClick={() => openDetail(c.course_id)}>
-                      <Users size={13} />
-                      Roster
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
+        {listBody}
       </div>
 
       {detail && (
@@ -296,6 +339,7 @@ export default function Courses() {
           <div className="row">
             <label>
               Teacher
+              {' '}
               <select
                 value={newTeacherId}
                 onChange={(e) => setNewTeacherId(e.target.value)}
@@ -326,40 +370,7 @@ export default function Courses() {
             onChange={(e) => setRosterSearch(e.target.value)}
           />
           <div className="roster">
-            {rosterSearch.trim() === '' ? (
-              pickerStudents().length === 0 ? (
-                <p className="muted">No students enrolled yet — type a name to add them.</p>
-              ) : (
-                <>
-                  <p className="muted">Current roster — type to search the whole school.</p>
-                  {pickerStudents().map((s) => (
-                    <label key={s.student_id} className="check">
-                      <input
-                        type="checkbox"
-                        checked={roster.includes(s.student_id)}
-                        onChange={() => toggleStudent(s.student_id)}
-                      />
-                      {s.first_name} {s.last_name} ({s.grade_level})
-                    </label>
-                  ))}
-                </>
-              )
-            ) : pickerBusy && picker.length === 0 ? (
-              <p className="muted">Searching…</p>
-            ) : pickerStudents().length === 0 ? (
-              <p className="muted">No students match your search.</p>
-            ) : (
-              pickerStudents().map((s) => (
-                <label key={s.student_id} className="check">
-                  <input
-                    type="checkbox"
-                    checked={roster.includes(s.student_id)}
-                    onChange={() => toggleStudent(s.student_id)}
-                  />
-                  {s.first_name} {s.last_name} ({s.grade_level})
-                </label>
-              ))
-            )}
+            {pickerContent}
           </div>
           <button className="btn btn-primary" onClick={saveRoster} disabled={busy}>
             Save roster

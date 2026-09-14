@@ -68,6 +68,7 @@ export default function Login() {
           <p className="login-sub">Sign in to continue to your dashboard.</p>
           <label>
             Email
+            {' '}
             <input
               type="email"
               value={email}
@@ -78,6 +79,7 @@ export default function Login() {
           </label>
           <label>
             Password
+            {' '}
             <input
               type="password"
               value={password}

@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1", tags=["grades"])
 staff_only = require_roles("admin", "teacher")
 
 
-@router.post("/grades", response_model=GradeResponse, status_code=201)
+@router.post("/grades", status_code=201)
 def record_grade(
     payload: GradeCreate,
     db: Session = Depends(get_db),
@@ -36,10 +36,10 @@ def record_grade(
     )
 
 
-@router.get("/students/{student_id}/grades", response_model=dict)
+@router.get("/students/{student_id}/grades")
 def get_student_grades(
     student_id: str,
-    courseId: uuid.UUID | None = Query(default=None),
+    course_id: uuid.UUID | None = Query(default=None, alias="courseId"),
     db: Session = Depends(get_db),
     user: User = Depends(staff_only),
 ) -> dict:
@@ -55,23 +55,23 @@ def get_student_grades(
         own_course_ids = course_service.list_teacher_course_ids(
             db, user.teacher_id
         )
-        if courseId is not None and courseId not in own_course_ids:
+        if course_id is not None and course_id not in own_course_ids:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only view grades for your own courses",
             )
         records = grade_service.list_student_grades(
-            db, student_id, courseId, course_ids=own_course_ids
+            db, student_id, course_id, course_ids=own_course_ids
         )
     else:
-        records = grade_service.list_student_grades(db, student_id, courseId)
+        records = grade_service.list_student_grades(db, student_id, course_id)
     return {
         "data": [GradeDetail.model_validate(r) for r in records],
         "meta": {"total": len(records)},
     }
 
 
-@router.put("/grades/{grade_id}", response_model=GradeResponse)
+@router.put("/grades/{grade_id}")
 def update_grade(
     grade_id: str,
     payload: GradeUpdate,
@@ -88,7 +88,7 @@ def update_grade(
     )
 
 
-@router.get("/courses/{course_id}/grades", response_model=dict)
+@router.get("/courses/{course_id}/grades")
 def get_course_grades(
     course_id: str,
     db: Session = Depends(get_db),

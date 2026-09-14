@@ -12,6 +12,114 @@ const EMPTY_FORM = {
   student_ids: [],
 }
 
+function submitLabel(busy, editing) {
+  if (busy) return 'Saving…'
+  if (editing) return 'Save changes'
+  return 'Add parent'
+}
+
+function studentNames(objs) {
+  if (!objs || objs.length === 0) return 'None'
+  return objs.map((s) => `${s.first_name} ${s.last_name}`).join(', ')
+}
+
+function studentCheckbox(s, checked, onToggle) {
+  return (
+    <label key={s.student_id} className="check">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onToggle(s.student_id)}
+      />
+      {s.first_name} {s.last_name} ({s.grade_level})
+    </label>
+  )
+}
+
+function pickerStudents(formResults, childMap, editing, formSearch) {
+  const byId = {}
+  if (editing) {
+    for (const s of childMap[editing.parent_id] || []) byId[s.student_id] = s
+  }
+  for (const s of formResults) if (!byId[s.student_id]) byId[s.student_id] = s
+  let list = Object.values(byId).filter((s) => s.active !== false)
+  const term = formSearch.trim().toLowerCase()
+  if (term) {
+    list = list.filter((s) =>
+      `${s.first_name} ${s.last_name}`.toLowerCase().includes(term)
+    )
+  }
+  return list
+}
+
+function parentsListBody(loading, rows, childMap, onEdit) {
+  if (loading) {
+    return <p className="muted">Loading…</p>
+  }
+  if (rows.length === 0) {
+    return <p className="muted">No parents found.</p>
+  }
+  return (
+    <div className="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Children</th>
+            <th>Status</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr key={p.parent_id}>
+              <td>
+                <div className="name-cell">
+                  <Avatar name={p.name} />
+                  {p.name}
+                </div>
+              </td>
+              <td>{p.email}</td>
+              <td>{p.phone}</td>
+              <td>{studentNames(childMap[p.parent_id] || [])}</td>
+              <td>{p.status ? <span className="pill pill-ok">Active</span> : <span className="pill pill-off">Inactive</span>}</td>
+              <td>
+                <button className="btn btn-ghost" onClick={() => onEdit(p)}>
+                  <Pencil size={13} />
+                  Edit
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function parentsPickerBody(rosterList, formSearch, pickerBusy, form, toggleStudent) {
+  if (formSearch.trim() === '') {
+    if (rosterList.length === 0) {
+      return <p className="muted">No linked children yet — type a student's name to attach them.</p>
+    }
+    return (
+      <>
+        <p className="muted">Currently linked children — type to search the whole school.</p>
+        {rosterList.map((s) => studentCheckbox(s, form.student_ids.includes(s.student_id), toggleStudent))}
+      </>
+    )
+  }
+  if (pickerBusy && rosterList.length === 0) {
+    return <p className="muted">Searching…</p>
+  }
+  if (rosterList.length === 0) {
+    return <p className="muted">No students match your search.</p>
+  }
+  return rosterList.map((s) => studentCheckbox(s, form.student_ids.includes(s.student_id), toggleStudent))
+}
+
 export default function Parents() {
   const [rows, setRows] = useState([])
   const [formResults, setFormResults] = useState([])
@@ -173,28 +281,9 @@ export default function Parents() {
     }
   }
 
-  const studentNames = (objs) =>
-    !objs || objs.length === 0
-      ? 'None'
-      : objs
-          .map((s) => `${s.first_name} ${s.last_name}`)
-          .join(', ')
-
-  function pickerStudents() {
-    const byId = {}
-    if (editing) {
-      for (const s of childMap[editing.parent_id] || []) byId[s.student_id] = s
-    }
-    for (const s of formResults) if (!byId[s.student_id]) byId[s.student_id] = s
-    let list = Object.values(byId).filter((s) => s.active !== false)
-    const term = formSearch.trim().toLowerCase()
-    if (term) {
-      list = list.filter((s) =>
-        `${s.first_name} ${s.last_name}`.toLowerCase().includes(term)
-      )
-    }
-    return list
-  }
+  const rosterList = pickerStudents(formResults, childMap, editing, formSearch)
+  const listBody = parentsListBody(loading, rows, childMap, startEdit)
+  const pickerContent = parentsPickerBody(rosterList, formSearch, pickerBusy, form, toggleStudent)
 
   return (
     <div>
@@ -207,14 +296,17 @@ export default function Parents() {
         <div className="grid2">
           <label>
             Full name
+            {' '}
             <input value={form.name} onChange={(e) => set('name', e.target.value)} required />
           </label>
           <label>
             Email
+            {' '}
             <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required />
           </label>
           <label>
             Phone
+            {' '}
             <input
               value={form.phone}
               onChange={(e) => set('phone', e.target.value)}
@@ -229,11 +321,13 @@ export default function Parents() {
                 checked={form.status}
                 onChange={(e) => set('status', e.target.checked)}
               />
+              {' '}
               Account active (un-tick to deactivate)
             </label>
           ) : (
             <label>
               Password (optional — lets them open the portal)
+              {' '}
               <input
                 type="password"
                 value={form.password}
@@ -246,6 +340,7 @@ export default function Parents() {
           {editing && (
             <label>
               New password (optional — leave blank to keep current)
+              {' '}
               <input
                 type="password"
                 value={form.password}
@@ -264,40 +359,7 @@ export default function Parents() {
           onChange={(e) => setFormSearch(e.target.value)}
         />
         <div className="roster">
-          {formSearch.trim() === '' ? (
-            pickerStudents().length === 0 ? (
-              <p className="muted">No linked children yet — type a student's name to attach them.</p>
-            ) : (
-              <>
-                <p className="muted">Currently linked children — type to search the whole school.</p>
-                {pickerStudents().map((s) => (
-                  <label key={s.student_id} className="check">
-                    <input
-                      type="checkbox"
-                      checked={form.student_ids.includes(s.student_id)}
-                      onChange={() => toggleStudent(s.student_id)}
-                    />
-                    {s.first_name} {s.last_name} ({s.grade_level})
-                  </label>
-                ))}
-              </>
-            )
-          ) : pickerBusy && pickerStudents().length === 0 ? (
-            <p className="muted">Searching…</p>
-          ) : pickerStudents().length === 0 ? (
-            <p className="muted">No students match your search.</p>
-          ) : (
-            pickerStudents().map((s) => (
-              <label key={s.student_id} className="check">
-                <input
-                  type="checkbox"
-                  checked={form.student_ids.includes(s.student_id)}
-                  onChange={() => toggleStudent(s.student_id)}
-                />
-                {s.first_name} {s.last_name} ({s.grade_level})
-              </label>
-            ))
-          )}
+          {pickerContent}
         </div>
         <div className="row">
           <button
@@ -305,7 +367,7 @@ export default function Parents() {
             type="submit"
             disabled={busy || (editing && !childrenReady[editing.parent_id])}
           >
-            {busy ? 'Saving…' : editing ? 'Save changes' : 'Add parent'}
+            {submitLabel(busy, editing)}
           </button>
           {editing && (
             <button className="btn" type="button" onClick={resetForm}>
@@ -319,48 +381,7 @@ export default function Parents() {
       </form>
 
       <div className="card">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : rows.length === 0 ? (
-          <p className="muted">No parents found.</p>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>Children</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-            <tbody>
-              {rows.map((p) => (
-                <tr key={p.parent_id}>
-                  <td>
-                    <div className="name-cell">
-                      <Avatar name={p.name} />
-                      {p.name}
-                    </div>
-                  </td>
-                  <td>{p.email}</td>
-                  <td>{p.phone}</td>
-                  <td>{studentNames(childMap[p.parent_id] || [])}</td>
-                  <td>{p.status ? <span className="pill pill-ok">Active</span> : <span className="pill pill-off">Inactive</span>}</td>
-                  <td>
-                    <button className="btn btn-ghost" onClick={() => startEdit(p)}>
-                      <Pencil size={13} />
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
+        {listBody}
       </div>
     </div>
   )

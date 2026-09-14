@@ -82,4 +82,13 @@ If resuming work on 001-student-management, **read `history/session-progress.md`
 - T001–T049 all done (auth foundation, US1 student core, US6 teachers/courses, US4 attendance, US5 grades, US7 parents, login accounts, US8 portal, Phase D PDF reports — 90 tests, ruff clean).
 - Remaining: Phase E React frontend (T050+) and Phase F.
 
+### SonarQube Quality Gate (2026-09-14) — REQUIRED WORKFLOW
+1. **Every code change must be verified through SonarQube**: after any change to `frontend/` or `backend/`, scan the affected project (`management-frontend` and/or `management-backend`), fix every code smell / quality / vulnerability finding, then re-scan to double-check the result is **0 open issues**.
+2. **Never run a scan without permission**: ask the user before EVERY SonarQube scan run and wait for explicit approval ("may I run the scan?").
+3. **Push once the gate is green**: after the scan → fix → re-scan cycle finishes with **0 open issues/bugs**, commit the changes and push to GitHub.
+- One-click helper: `run-scan.cmd [frontend|backend]` at the repo root (sets the SONAR token, runs the scanner from the project dir, opens the dashboard). Existing status:
+  - `management-frontend` — 0 open (58 issues fixed 2026-09-14)
+  - `management-backend` — 0 open (all issues fixed 2026-09-14; full suite: 205 tests pass, `python -m ruff check .` clean)
+- Dashboards: `http://localhost:9000/dashboard?id=management-frontend` and `...?id=management-backend`.
+
 <!-- MANUAL ADDITIONS END -->

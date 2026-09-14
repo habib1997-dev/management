@@ -5,6 +5,12 @@ import Avatar from '../components/Avatar.jsx'
 
 const EMPTY_FORM = { name: '', email: '', subjects_taught: '', password: '', status: true }
 
+function submitLabel(busy, editing) {
+  if (busy) return 'Saving…'
+  if (editing) return 'Save changes'
+  return 'Add teacher'
+}
+
 export default function Teachers() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
@@ -95,6 +101,50 @@ export default function Teachers() {
     }
   }
 
+  let listBody
+  if (loading) {
+    listBody = <p className="muted">Loading…</p>
+  } else if (rows.length === 0) {
+    listBody = <p className="muted">No teachers found.</p>
+  } else {
+    listBody = (
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Subjects</th>
+              <th>Status</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t) => (
+              <tr key={t.teacher_id}>
+                <td>
+                  <div className="name-cell">
+                    <Avatar name={t.name} />
+                    {t.name}
+                  </div>
+                </td>
+                <td>{t.email}</td>
+                <td>{t.subjects_taught || '—'}</td>
+                <td>{t.status ? <span className="pill pill-ok">Active</span> : <span className="pill pill-off">Inactive</span>}</td>
+                <td>
+                  <button className="btn btn-ghost" onClick={() => startEdit(t)}>
+                    <Pencil size={13} />
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   return (
     <div>
       <h1>Teachers</h1>
@@ -106,14 +156,17 @@ export default function Teachers() {
         <div className="grid2">
           <label>
             Full name
+            {' '}
             <input value={form.name} onChange={(e) => set('name', e.target.value)} required />
           </label>
           <label>
             Email
+            {' '}
             <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required />
           </label>
           <label>
             Subjects taught
+            {' '}
             <input
               value={form.subjects_taught}
               onChange={(e) => set('subjects_taught', e.target.value)}
@@ -127,11 +180,13 @@ export default function Teachers() {
                 checked={form.status}
                 onChange={(e) => set('status', e.target.checked)}
               />
+              {' '}
               Account active (un-tick to deactivate)
             </label>
           ) : (
             <label>
               Password (optional — lets them log in)
+              {' '}
               <input
                 type="password"
                 value={form.password}
@@ -144,6 +199,7 @@ export default function Teachers() {
           {editing && (
             <label>
               New password (optional — leave blank to keep current)
+              {' '}
               <input
                 type="password"
                 value={form.password}
@@ -156,7 +212,7 @@ export default function Teachers() {
         </div>
         <div className="row">
           <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? 'Saving…' : editing ? 'Save changes' : 'Add teacher'}
+            {submitLabel(busy, editing)}
           </button>
           {editing && (
             <button className="btn" type="button" onClick={resetForm}>
@@ -167,46 +223,7 @@ export default function Teachers() {
       </form>
 
       <div className="card">
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : rows.length === 0 ? (
-          <p className="muted">No teachers found.</p>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Subjects</th>
-                  <th>Status</th>
-                  <th />
-                </tr>
-              </thead>
-            <tbody>
-              {rows.map((t) => (
-                <tr key={t.teacher_id}>
-                  <td>
-                    <div className="name-cell">
-                      <Avatar name={t.name} />
-                      {t.name}
-                    </div>
-                  </td>
-                  <td>{t.email}</td>
-                  <td>{t.subjects_taught || '—'}</td>
-                  <td>{t.status ? <span className="pill pill-ok">Active</span> : <span className="pill pill-off">Inactive</span>}</td>
-                  <td>
-                    <button className="btn btn-ghost" onClick={() => startEdit(t)}>
-                      <Pencil size={13} />
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        )}
+        {listBody}
       </div>
     </div>
   )

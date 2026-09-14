@@ -36,7 +36,7 @@ def list_administrators(
     }
 
 
-@router.get("/users", response_model=dict)
+@router.get("/users")
 def list_users(
     db: Session = Depends(get_db),
     _admin: User = Depends(require_roles("admin")),
@@ -48,7 +48,7 @@ def list_users(
     }
 
 
-@router.put("/users/{user_id}", response_model=UserAdminResponse)
+@router.put("/users/{user_id}")
 def update_user(
     user_id: str,
     payload: UserAdminUpdate,

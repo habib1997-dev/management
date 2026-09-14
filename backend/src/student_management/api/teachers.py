@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/v1", tags=["teachers"])
 admin_only = require_roles("admin")
 
 
-@router.get("/teachers", response_model=TeacherListResponse)
+@router.get("/teachers")
 def list_teachers(
     db: Session = Depends(get_db),
     _admin: User = Depends(admin_only),
@@ -35,7 +35,7 @@ def list_teachers(
     )
 
 
-@router.post("/teachers", response_model=TeacherResponse, status_code=201)
+@router.post("/teachers", status_code=201)
 def create_teacher(
     payload: TeacherCreate,
     db: Session = Depends(get_db),
@@ -48,7 +48,7 @@ def create_teacher(
     )
 
 
-@router.put("/teachers/{teacher_id}", response_model=TeacherResponse)
+@router.put("/teachers/{teacher_id}")
 def update_teacher(
     teacher_id: str,
     payload: TeacherUpdate,
@@ -64,7 +64,7 @@ def update_teacher(
     )
 
 
-@router.get("/teachers/{teacher_id}", response_model=TeacherDetail)
+@router.get("/teachers/{teacher_id}")
 def get_teacher(
     teacher_id: str,
     db: Session = Depends(get_db),
@@ -77,7 +77,7 @@ def get_teacher(
 
 
 @router.post(
-    "/teachers/{teacher_id}/account", response_model=AccountResponse, status_code=201
+    "/teachers/{teacher_id}/account", status_code=201
 )
 def create_teacher_account(
     teacher_id: str,

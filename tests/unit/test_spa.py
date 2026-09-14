@@ -1,7 +1,5 @@
 """Unit tests for the ``serve_frontend`` SPA helper."""
 
-import os
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from student_management.main import serve_frontend
@@ -19,7 +17,7 @@ def _make_dist(tmp_path):
     return dist
 
 
-def test_spa_fallback_serves_index_for_unknown_routes(tmp_path):
+def test_spa_fallback_serves_index_for_unknown_routes(tmp_path, monkeypatch):
     dist = _make_dist(tmp_path)
     app = FastAPI()
 
@@ -27,11 +25,8 @@ def test_spa_fallback_serves_index_for_unknown_routes(tmp_path):
     def health():
         return {"status": "ok"}
 
-    os.environ["FRONTEND_DIST"] = str(dist)
-    try:
-        serve_frontend(app)
-    finally:
-        os.environ.pop("FRONTEND_DIST", None)
+    monkeypatch.setenv("FRONTEND_DIST", str(dist))
+    serve_frontend(app)
 
     client = TestClient(app)
 
@@ -51,7 +46,7 @@ def test_spa_fallback_serves_index_for_unknown_routes(tmp_path):
     assert r.json() == {"status": "ok"}
 
 
-def test_spa_fallback_does_not_shadow_api_404(tmp_path):
+def test_spa_fallback_does_not_shadow_api_404(tmp_path, monkeypatch):
     dist = _make_dist(tmp_path)
     app = FastAPI()
 
@@ -59,11 +54,8 @@ def test_spa_fallback_does_not_shadow_api_404(tmp_path):
     def health():
         return {"status": "ok"}
 
-    os.environ["FRONTEND_DIST"] = str(dist)
-    try:
-        serve_frontend(app)
-    finally:
-        os.environ.pop("FRONTEND_DIST", None)
+    monkeypatch.setenv("FRONTEND_DIST", str(dist))
+    serve_frontend(app)
 
     client = TestClient(app)
 
@@ -72,15 +64,12 @@ def test_spa_fallback_does_not_shadow_api_404(tmp_path):
     assert r.status_code == 404
 
 
-def test_spa_static_assets_are_served(tmp_path):
+def test_spa_static_assets_are_served(tmp_path, monkeypatch):
     dist = _make_dist(tmp_path)
     app = FastAPI()
 
-    os.environ["FRONTEND_DIST"] = str(dist)
-    try:
-        serve_frontend(app)
-    finally:
-        os.environ.pop("FRONTEND_DIST", None)
+    monkeypatch.setenv("FRONTEND_DIST", str(dist))
+    serve_frontend(app)
 
     client = TestClient(app)
 
@@ -92,15 +81,12 @@ def test_spa_static_assets_are_served(tmp_path):
     assert r.status_code == 200
 
 
-def test_spa_skips_when_dist_missing(tmp_path):
+def test_spa_skips_when_dist_missing(tmp_path, monkeypatch):
     missing = tmp_path / "no_such_dir"
     app = FastAPI()
 
-    os.environ["FRONTEND_DIST"] = str(missing)
-    try:
-        serve_frontend(app)
-    finally:
-        os.environ.pop("FRONTEND_DIST", None)
+    monkeypatch.setenv("FRONTEND_DIST", str(missing))
+    serve_frontend(app)
 
     client = TestClient(app)
 

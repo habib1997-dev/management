@@ -87,7 +87,7 @@ def test_report_card_full_flow(client, db_session, make_auth_headers):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/pdf")
     assert "inline" not in resp.headers.get("content-disposition", "")
-    assert b"%PDF-" == resp.content[:5]
+    assert resp.content[:5] == b"%PDF-"
     assert resp.content.rstrip().endswith(b"%%EOF")
 
     # 4. Extract text and validate the actual content

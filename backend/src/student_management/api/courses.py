@@ -26,18 +26,18 @@ admin_only = require_roles("admin")
 staff_only = require_roles("admin", "teacher")
 
 
-@router.get("/courses", response_model=CourseListResponse)
+@router.get("/courses")
 def list_courses(
     db: Session = Depends(get_db),
     user: User = Depends(staff_only),
-    teacherId: str | None = Query(default=None),
-    gradeLevel: str | None = Query(default=None),
+    teacher_id: str | None = Query(default=None, alias="teacherId"),
+    grade_level: str | None = Query(default=None, alias="gradeLevel"),
 ) -> CourseListResponse:
     own_teacher_id = user.teacher_id if user.role == "teacher" else None
     courses = course_service.list_courses(
         db,
-        teacher_id=teacherId,
-        grade_level=gradeLevel,
+        teacher_id=teacher_id,
+        grade_level=grade_level,
         own_teacher_id=own_teacher_id,
     )
     return CourseListResponse(
@@ -46,7 +46,7 @@ def list_courses(
     )
 
 
-@router.post("/courses", response_model=CourseResponse, status_code=201)
+@router.post("/courses", status_code=201)
 def create_course(
     payload: CourseCreate,
     db: Session = Depends(get_db),
@@ -59,7 +59,7 @@ def create_course(
     )
 
 
-@router.get("/courses/{course_id}", response_model=CourseDetail)
+@router.get("/courses/{course_id}")
 def get_course(
     course_id: str,
     db: Session = Depends(get_db),
@@ -72,7 +72,7 @@ def get_course(
     return detail
 
 
-@router.put("/courses/{course_id}", response_model=CourseResponse)
+@router.put("/courses/{course_id}")
 def update_course(
     course_id: str,
     payload: CourseUpdate,
@@ -87,7 +87,7 @@ def update_course(
     )
 
 
-@router.get("/courses/{course_id}/students", response_model=dict)
+@router.get("/courses/{course_id}/students")
 def list_course_students(
     course_id: str,
     db: Session = Depends(get_db),
@@ -102,7 +102,7 @@ def list_course_students(
     }
 
 
-@router.get("/courses/{course_id}/parents", response_model=dict)
+@router.get("/courses/{course_id}/parents")
 def list_course_parents(
     course_id: str,
     db: Session = Depends(get_db),
@@ -132,7 +132,7 @@ def list_course_parents(
     return {"data": data, "meta": {"total": len(students)}}
 
 
-@router.put("/courses/{course_id}/students", response_model=CourseDetail)
+@router.put("/courses/{course_id}/students")
 def update_course_students(
     course_id: str,
     payload: CourseRosterUpdate,

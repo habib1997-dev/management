@@ -93,7 +93,7 @@ def serve_frontend(app: FastAPI) -> None:
 
     dist = Path(os.environ.get(
         "FRONTEND_DIST",
-        str(Path(__file__).resolve().parents[4] / "frontend" / "dist"),
+        str(Path(__file__).resolve().parents[3] / "frontend" / "dist"),
     ))
     if not dist.is_dir():
         return

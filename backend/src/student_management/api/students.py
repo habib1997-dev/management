@@ -39,7 +39,7 @@ def _student_detail(detail: StudentDetail, *, redact_contact: bool) -> StudentDe
     return detail
 
 
-@router.post("/students", response_model=StudentResponse, status_code=201)
+@router.post("/students", status_code=201)
 def enroll_student(
     payload: StudentEnrollment,
     db: Session = Depends(get_db),
@@ -52,23 +52,23 @@ def enroll_student(
     )
 
 
-@router.get("/students", response_model=StudentListResponse)
+@router.get("/students")
 def list_students(
     db: Session = Depends(get_db),
     user: User = Depends(staff_only),
     page: int = Query(1, ge=1),
-    pageSize: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
     search: str | None = None,
-    gradeLevel: str | None = None,
+    grade_level: str | None = Query(default=None, alias="gradeLevel"),
     active: bool | None = None,
 ) -> StudentListResponse:
     own_teacher_id = user.teacher_id if user.role == "teacher" else None
     items, total = student_service.list_students(
         db,
         page=page,
-        page_size=pageSize,
+        page_size=page_size,
         search=search,
-        grade_level=gradeLevel,
+        grade_level=grade_level,
         active=active,
         own_teacher_id=own_teacher_id,
     )
@@ -77,11 +77,11 @@ def list_students(
             _student_detail(StudentDetail.model_validate(s), redact_contact=user.role != "admin")
             for s in items
         ],
-        meta={"page": page, "pageSize": pageSize, "total": total},
+        meta={"page": page, "pageSize": page_size, "total": total},
     )
 
 
-@router.get("/students/{student_id}", response_model=StudentDetail)
+@router.get("/students/{student_id}")
 def get_student(
     student_id: str,
     db: Session = Depends(get_db),
@@ -99,7 +99,7 @@ def get_student(
     return _student_detail(StudentDetail.model_validate(student), redact_contact=user.role != "admin")
 
 
-@router.put("/students/{student_id}", response_model=StudentResponse)
+@router.put("/students/{student_id}")
 def update_student(
     student_id: str,
     payload: StudentUpdate,
@@ -114,7 +114,7 @@ def update_student(
     )
 
 
-@router.post("/enrollments", response_model=EnrollmentResponse, status_code=201)
+@router.post("/enrollments", status_code=201)
 def create_enrollment(
     payload: EnrollmentCreate,
     db: Session = Depends(get_db),
@@ -127,7 +127,7 @@ def create_enrollment(
     )
 
 
-@router.get("/students/{student_id}/parents", response_model=dict)
+@router.get("/students/{student_id}/parents")
 def list_student_parents(
     student_id: str,
     db: Session = Depends(get_db),

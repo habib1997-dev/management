@@ -60,10 +60,10 @@ export async function api(path, { method = 'GET', body } = {}) {
 
   if (!res.ok) {
     if (typeof data?.detail === 'string') {
-      throw new Error(data.detail)
+      throw new TypeError(data.detail)
     }
     if (Array.isArray(data?.detail)) {
-      throw new Error(data.detail.map((d) => d.msg || JSON.stringify(d)).join('; '))
+      throw new TypeError(data.detail.map((d) => d.msg || JSON.stringify(d)).join('; '))
     }
     throw new Error(data?.message || `Request failed with status ${res.status}`)
   }

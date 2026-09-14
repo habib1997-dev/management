@@ -9,6 +9,7 @@ venv/
 *.po
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # Environment / secrets
@@ -28,6 +29,9 @@ node_modules/
 dist/
 .vite/
 npm-debug.log*
+
+# SonarQube scanner
+.scannerwork/
 
 # OS / editor
 .DS_Store
