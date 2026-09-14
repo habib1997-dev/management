@@ -8,11 +8,17 @@ REM          (defaults to "backend" when no argument is given)
 REM
 REM  Reads sonar-project.properties from the chosen project dir,
 REM  runs the scanner, then opens that project's dashboard.
+REM  Requires the SONAR_TOKEN environment variable (never stored in this file).
 REM ============================================================
 
 set "SONAR_URL=http://localhost:9000"
-set "SONAR_TOKEN=REMOVED"
 set "SCANNER=C:\sonar-scanner\bin\sonar-scanner.bat"
+
+if "%SONAR_TOKEN%"=="" (
+    echo ERROR: SONAR_TOKEN is not set. Generate one in SonarQube UI ^> My Account ^> Security
+    echo then set it: setx SONAR_TOKEN ^<your-token^>   ^(then reopen the terminal^)
+    exit /b 1
+)
 
 set "PROJECT=%~1"
 if "%PROJECT%"=="" set "PROJECT=backend"
