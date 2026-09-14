@@ -1,6 +1,6 @@
 # SonarQube Scan Report — management-backend
 
-- **Date:** 2026-09-14 (latest analysis `2026-09-14T20:43:22+0500`)
+- **Date:** 2026-09-14 (latest analysis `2026-09-14T23:06:40+0500`)
 - **Server:** SonarQube Community 26.9.0 — `http://localhost:9000`
 - **Project key:** `management-backend`
 - **Dashboard:** `http://localhost:9000/dashboard?id=management-backend`
@@ -19,13 +19,13 @@
 
 | Metric | Value |
 | --- | --- |
-| Lines of code (ncloc) | 4 306 |
-| Total lines | 5 600 |
-| Statements | 2 327 |
-| Comment lines | 373 |
+| Lines of code (ncloc) | 4 395 |
+| Total lines | 5 732 |
+| Statements | 2 392 |
+| Comment lines | 391 |
 | Test coverage | **95.8%** |
 | Duplicated lines density | 0.0% |
-| Cognitive complexity | 442 |
+| Cognitive complexity | 468 |
 | Reliability rating | A (1.0) |
 | Security rating | A (1.0) |
 | Maintainability rating | A (1.0) |
@@ -46,11 +46,12 @@ Checked via `api/issues/search?componentKeys=management-backend&resolved=false` 
 
 | Date | Quality gate |
 | --- | --- |
-| 2026-09-14T20:43:22+0500 | OK |
+| 2026-09-14T23:06:40+0500 | OK |
 
 ## Notes
 
-- Last scan run: 2026-09-14 20:43 local time with `run-scan.cmd backend` (coverage report generated first via `python -m pytest --cov=student_management --cov-report=xml:backend/coverage.xml`).
+- Last scan run: 2026-09-14 23:06 local time with `run-scan.cmd backend` (coverage report generated first via `python -m pytest --cov=student_management --cov-report=xml:backend/coverage.xml`).
 - Full suite: **205 tests pass**, `python -m ruff check .` clean.
-- Live smoke: `backend/scripts/smoke_live.py` — **14/14 checks pass** (health, brand, admin/teacher/parent logins, students, CSV export, courses, attendance, portal children, PDF bytes, SPA fallback, API 404).
+- Live smoke: `backend/scripts/smoke_live.py` — **20/20 checks pass** (health, brand, admin/teacher/parent logins, students, CSV export, courses, attendance, portal children, PDF bytes, SPA fallback, API 404, PLUS create ops: POST /students, /enrollments, /attendance, /grades with readbacks), verified from the replicated Docker layout.
+- Prod bootstrap: `scripts.create_admin.py` refuses the demo default, enforces ≥12 chars, idempotent; production startup runs only `alembic upgrade head` then `uvicorn` (never seeds).
 - Raw API data: see `backend/sonar-data.json`.

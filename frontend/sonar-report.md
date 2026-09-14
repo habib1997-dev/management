@@ -1,6 +1,6 @@
 # SonarQube Scan Report — management-frontend
 
-- **Date:** 2026-09-14 (latest analysis `2026-09-14T20:38:10+0500`)
+- **Date:** 2026-09-14 (latest analysis `2026-09-14T23:07:17+0500`)
 - **Server:** SonarQube Community 26.9.0 — `http://localhost:9000`
 - **Project key:** `management-frontend`
 - **Dashboard:** `http://localhost:9000/dashboard?id=management-frontend`
@@ -51,11 +51,13 @@ Checked via `api/issues/search?componentKeys=management-frontend&resolved=false`
 
 | Date | Quality gate |
 | --- | --- |
-| 2026-09-14T20:38:10+0500 | OK |
+| 2026-09-14T23:07:17+0500 | OK |
 
 ## Notes
 
-- Last scan run: 2026-09-14 20:38 local time with `run-scan.cmd frontend`.
+- Last scan run: 2026-09-14 23:07 local time with `run-scan.cmd frontend`.
+- `npm run build` passes after all code-smell fixes (historical 58 issues resolved).
+- SCM "missing blame information" warning noise silenced: `.vite/**`, `**/.scannerwork/**` added to `sonar.exclusions` (all 19 analyzed files carry full SCM data).
 - `npm run build` passes after all code-smell fixes (historical 58 issues resolved).
 - When a test framework + coverage is added, reselect "Sonar way" on this project to restore
   the 80% coverage-on-new-code condition.

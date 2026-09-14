@@ -25,6 +25,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from datetime import date
 
 DEFAULT_BASE = "http://localhost:8199"
 LOGIN_ISSUED = "token issued"
@@ -95,7 +96,7 @@ def _smoke_health_and_brand(base: str) -> None:
           f"status={status} keys={list(brand) if isinstance(brand, dict) else brand!r}")
 
 
-def _smoke_admin(base: str, token: str) -> None:
+def _smoke_admin(base: str, token: str) -> str | None:
     status, students = request("GET", f"{base}/api/v1/students?page=1&pageSize=50", token=token)
     rows = students.get("data") if isinstance(students, dict) else None
     check("admin GET /students -> paginated list", status == 200 and isinstance(rows, list) and len(rows) >= 1,
@@ -104,14 +105,15 @@ def _smoke_admin(base: str, token: str) -> None:
     status, csv = request("GET", f"{base}/api/v1/export/students.csv", token=token)
     is_csv = isinstance(csv, bytes) and b"student_id" in csv[:300]
     check("admin CSV export -> csv bytes", status == 200 and is_csv, f"status={status} len={len(csv) if isinstance(csv, bytes) else 0}")
+    return first_id(rows[0]) if isinstance(rows, list) and rows else None
 
 
-def _smoke_teacher(base: str) -> None:
+def _smoke_teacher(base: str) -> tuple[str | None, str | None]:
     teacher = os.environ.get("SMOKE_TEACHER_EMAIL", "jane.smith@schoolsystem.com")
     teacher_pw = os.environ.get("SMOKE_TEACHER_PASSWORD", "teacher123")
     token, data = _login_check(base, teacher, teacher_pw, "teacher")
     if token is None:
-        return
+        return None, None
 
     tid = data.get("teacher_id")
     url = f"{base}/api/v1/courses?teacherId={tid}" if tid else f"{base}/api/v1/courses"
@@ -119,12 +121,13 @@ def _smoke_teacher(base: str) -> None:
     course_rows = courses.get("data") if isinstance(courses, dict) else None
     check("teacher GET /courses -> own courses", status == 200 and isinstance(course_rows, list) and len(course_rows) >= 1,
           f"status={status} count={len(course_rows) if isinstance(course_rows, list) else 'n/a'}")
-    course_id = first_id(course_rows[0]) if course_rows else None
+    course_id = first_id(course_rows[0]) if isinstance(course_rows, list) and course_rows else None
     if course_id:
         status, _ = request("GET", f"{base}/api/v1/attendance/{course_id}", token=token)
         check("teacher GET attendance for own course", status == 200, f"status={status}")
     else:
         check("teacher GET attendance for own course", False, "no course available")
+    return token, course_id
 
 
 def _smoke_parent(base: str) -> None:
@@ -153,6 +156,45 @@ def _smoke_parent(base: str) -> None:
         check("parent PDF download -> %PDF bytes", False, "no child id from portal")
 
 
+def _smoke_create_ops(base: str, admin_token: str, teacher_token: str, course_id: str, roster_student_id: str) -> None:
+    today = date.today().isoformat()
+
+    status, body = request("POST", f"{base}/api/v1/students", token=admin_token, body={
+        "first_name": "Smoke", "last_name": "Test",
+        "date_of_birth": "2010-03-15", "grade_level": "10",
+    })
+    new_student_id = str(body["student"]["student_id"]) if status == 201 and isinstance(body, dict) else None
+    check("admin POST /students -> 201", status == 201 and isinstance(new_student_id, str) and new_student_id,
+          f"status={status}")
+
+    status, _ = request("POST", f"{base}/api/v1/enrollments", token=admin_token, body={
+        "student_id": new_student_id, "enrolled_by": "smoke-test",
+    })
+    check("admin POST /enrollments -> 201", status == 201, f"status={status}")
+
+    status, _ = request("POST", f"{base}/api/v1/attendance", token=teacher_token, body={
+        "course_id": course_id, "date": today,
+        "records": [{"student_id": roster_student_id, "status": "present"}],
+    })
+    check("teacher POST /attendance -> 201", status == 201, f"status={status}")
+
+    status, _ = request("POST", f"{base}/api/v1/grades", token=teacher_token, body={
+        "student_id": roster_student_id, "course_id": course_id,
+        "grade_value": 88.0, "assignment_type": "quiz",
+        "date_assigned": today, "date_due": today,
+    })
+    check("teacher POST /grades -> 201", status == 201, f"status={status}")
+
+    status, detail = request("GET", f"{base}/api/v1/students/{new_student_id}", token=admin_token)
+    check("admin GET /students/{id} -> readback", status == 200 and isinstance(detail, dict) and detail.get("first_name") == "Smoke",
+          f"status={status}")
+
+    status, grades = request("GET", f"{base}/api/v1/students/{roster_student_id}/grades", token=teacher_token)
+    check("teacher GET /students/{id}/grades -> readback",
+          status == 200 and isinstance(grades, dict) and isinstance(grades.get("data"), list) and len(grades["data"]) >= 1,
+          f"status={status}")
+
+
 def _smoke_spa(base: str) -> None:
     status, html = request("GET", f"{base}/")
     has_root = isinstance(html, bytes) and b'id="root"' in html
@@ -172,13 +214,15 @@ def main() -> int:
     print(f"Smoke test against: {base}")
     _smoke_health_and_brand(base)
 
-    token, _ = _login_check(base, admin, admin_pw, "admin")
-    if token is not None:
-        _smoke_admin(base, token)
+    admin_token, _ = _login_check(base, admin, admin_pw, "admin")
+    roster_student_id = _smoke_admin(base, admin_token) if admin_token else None
 
-    _smoke_teacher(base)
+    teacher_token, course_id = _smoke_teacher(base)
     _smoke_parent(base)
     _smoke_spa(base)
+
+    if admin_token and teacher_token and course_id and roster_student_id:
+        _smoke_create_ops(base, admin_token, teacher_token, course_id, roster_student_id)
 
     print()
     if FAILURES:

@@ -16,3 +16,7 @@ services:
         sync: false          # set to your service.onrender.com hostname
       - key: BRAND_DEMO
         value: "false"
+      - key: ADMIN_EMAIL
+        sync: false          # first-run bootstrap only — used once by scripts.create_admin (Render Shell)
+      - key: ADMIN_PASSWORD
+        sync: false          # first-run bootstrap only — private, strong password (min 12 chars, not changeme123)

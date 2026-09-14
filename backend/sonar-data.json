@@ -1,6 +1,6 @@
 ﻿{
     "project":  "management-backend",
-    "fetched_at":  "2026-09-14T20:45:27.9081026+05:00",
+    "fetched_at":  "2026-09-14T23:08:33.4945607+05:00",
     "quality_gate":  "OK",
     "gate_conditions":  [
                             {
@@ -43,11 +43,11 @@
                      },
                      {
                          "metric":  "comment_lines",
-                         "value":  "373"
+                         "value":  "391"
                      },
                      {
                          "metric":  "cognitive_complexity",
-                         "value":  "442",
+                         "value":  "468",
                          "bestValue":  false
                      },
                      {
@@ -57,15 +57,15 @@
                      },
                      {
                          "metric":  "ncloc",
-                         "value":  "4306"
+                         "value":  "4395"
                      },
                      {
                          "metric":  "statements",
-                         "value":  "2327"
+                         "value":  "2392"
                      },
                      {
                          "metric":  "lines",
-                         "value":  "5600"
+                         "value":  "5732"
                      },
                      {
                          "metric":  "sqale_rating",
@@ -74,5 +74,5 @@
                      }
                  ],
     "open_issues_total":  0,
-    "latest_analysis":  "2026-09-14T20:43:22+0500"
+    "latest_analysis":  "2026-09-14T23:06:40+0500"
 }

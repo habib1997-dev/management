@@ -49,26 +49,34 @@ future.
    | `DATABASE_URL` | *(paste the Neon connection string from Step 1)* |
    | `SECRET_KEY` | *(click Generate — Render creates a random 64-char string)* |
    | `ALLOWED_HOSTS` | `<your-service-name>.onrender.com` |
-   | `BUILD_DEMO` | `false` |
+   | `BRAND_DEMO` | `false` |
+   | `ADMIN_EMAIL` | *(set right before Step 3's admin bootstrap, then remove)* |
+   | `ADMIN_PASSWORD` | *(set right before Step 3's admin bootstrap, then remove)* |
 5. Click **Create Web Service**.
 
 Render will automatically:
 - Pull your repo.
 - Build the Docker image (frontend + backend in one image).
-- Run `alembic upgrade head` → `python -m scripts.seed` → `uvicorn` (via the CMD).
+- Run `alembic upgrade head` → `uvicorn` (via the CMD — **no seed/demo data in production**).
 
 ---
 
 ## Step 3 — Verify
 
 1. Once the deploy finishes, open `https://<your-service>.onrender.com`.
-2. You should see the login page.
-3. Log in with the seeded admin credentials:
+2. You should see the login page (no accounts exist yet).
+3. **Create the first admin once** (Render → your service → **Shell**):
+
+   ```bash
+   ADMIN_EMAIL=you@school.org ADMIN_PASSWORD='a long private passphrase' \
+       python -m scripts.create_admin
    ```
-   Email:    admin@schoolsystem.com
-   Password: changeme123
-   ```
-4. Run through the smoke test:
+
+   The script refuses short passwords (< 12 chars) and the demo default
+   `changeme123`.  Then remove `ADMIN_EMAIL`/`ADMIN_PASSWORD` from the
+   service's Environment settings — the account already exists and is never
+   recreated (re-runs are safe no-ops that keep the existing password).
+4. Log in with that admin account and run through the smoke test:
    - Create a student, teacher, course, parent.
    - Assign teacher to course, add students to roster.
    - Teacher: mark attendance, record grades.
@@ -97,13 +105,14 @@ Dockerfile (multi-stage)
 │   ├── npm run build → Vite produces frontend/dist/
 │   └── dist/ is a static SPA (index.html + hashed assets)
 └── Stage 2 (python:3.11-slim)
-    ├── pip install ./backend → installs all runtime deps from pyproject.toml
-    ├── COPY frontend/dist → /app/frontend/dist
-    └── CMD: alembic upgrade head && seed && uvicorn
+    ├── pip install . → backend deps + the app package
+    ├── /app/backend: alembic.ini, alembic/, src/, scripts/ (flat layout)
+    ├── COPY frontend/dist → /app/frontend/dist  (FRONTEND_DIST env, read by serve_frontend)
+    └── CMD: alembic upgrade head && uvicorn (no seed)
 ```
 
-`serve_frontend()` in `main.py` automatically mounts `frontend/dist` if it
-exists (production), or skips silently if not (local dev via `npm run dev`).
+`serve_frontend()` in `main.py` mounts the SPA at `FRONTEND_DIST` (`/app/frontend/dist`
+in the image); it skips silently if missing (local dev via `npm run dev`).
 
 ---
 
@@ -114,5 +123,5 @@ exists (production), or skips silently if not (local dev via `npm run dev`).
 | App crashes on deploy | Check Render logs — usually a missing env var (`DATABASE_URL` or `SECRET_KEY`). |
 | 403 Forbidden on every page | `ALLOWED_HOSTS` must exactly match your Render hostname (`foo.onrender.com`). |
 | `Invalid school branding` on startup | A missing or corrupt `logo.png`.  Re-deploy or replace the file. |
-| Login fails with correct password | The `users` row was not seeded.  Re-run deploy (CMD runs seed automatically), or check DB is reachable from Neon dashboard. |
+| Login fails with correct password | The admin account was never created.  Run `python -m scripts.create_admin` in Render Shell (Step 3). |
 | PDF says "TBD" in name/logo | Branding env vars not set, or logo file missing.  Set `BRAND_DEMO=false` and confirm logo exists. |
