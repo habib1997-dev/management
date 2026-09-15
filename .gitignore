@@ -28,6 +28,7 @@ backups/
 node_modules/
 dist/
 .vite/
+frontend/coverage/
 npm-debug.log*
 
 # SonarQube scanner

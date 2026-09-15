@@ -1,14 +1,21 @@
 ﻿{
-    "project":  "management-frontend",
-    "fetched_at":  "2026-09-14T23:08:34.1926779+05:00",
+    "project":       "management-frontend",
+    "fetched_at":    "2026-09-15T13:13:00+05:00",
     "quality_gate":  "OK",
     "gate_conditions":  [
+                            {
+                                "status":  "OK",
+                                "metricKey":  "new_coverage",
+                                "comparator":  "LT",
+                                "errorThreshold":  "60",
+                                "actualValue":  "82.2"
+                            },
                             {
                                 "status":  "OK",
                                 "metricKey":  "new_duplicated_lines_density",
                                 "comparator":  "GT",
                                 "errorThreshold":  "3",
-                                "actualValue":  "1.76211"
+                                "actualValue":  "0.35826"
                             },
                             {
                                 "status":  "OK",
@@ -21,7 +28,7 @@
     "measures":  [
                      {
                          "metric":  "coverage",
-                         "value":  "0.0",
+                         "value":  "85.5",
                          "bestValue":  false
                      },
                      {
@@ -67,5 +74,5 @@
                      }
                  ],
     "open_issues_total":  0,
-    "latest_analysis":  "2026-09-14T23:07:17+0500"
+    "latest_analysis":  "2026-09-15T13:11:12+0500"
 }
