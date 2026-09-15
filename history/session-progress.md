@@ -38,8 +38,7 @@ courses, parents/parent portal, PDF report cards, React frontend. Working throug
     free text sorts alphabetically (10 before 2).
   - Phone numbers are **text** (leading zeros/`+`/`-`).
   - Frontend: React (Vite). One `users` table. MVP-first approach (done).
-- **Demo credentials** (dev DB + seed.py): admin `admin@schoolsystem.com` / `changeme123`;
-  teacher `jane.smith@schoolsystem.com` / `teacher123`; parent `maria.doe@family.net` / `parent123`.
+- **Demo logins** (dev DB + seed.py): admin `admin@schoolsystem.com`, teacher `jane.smith@schoolsystem.com`, parent `maria.doe@family.net`. Passwords are set at seed time via env (`ADMIN_PASSWORD`, `DEMO_TEACHER_PASSWORD`, `DEMO_PARENT_PASSWORD`) or the interactive prompt — no defaults are committed.
   `.local`/`school.edu` domains are rejected by email-validator — use `schoolsystem.com`/`family.net`.
 - Email convention: login trims whitespace; student/teacher emails use lenient validation
   (`schemas/common.py: validate_email_lenient`, `check_deliverability=False`).

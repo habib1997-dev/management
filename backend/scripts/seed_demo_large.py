@@ -5,13 +5,19 @@ of the base seed (admin + Jane Smith + Maria Doe).
 
 Idempotent: exits early if already seeded (guarded by Alice Cohen's email).
 
+Demo-login passwords are NOT committed. They are read from the environment —
+``DEMO_TEACHER_PASSWORD`` and ``DEMO_PARENT_PASSWORD`` — and the seed aborts if
+either is missing. Pass ``--interactive`` to be prompted on a terminal instead.
+
 Usage (from the backend/ directory):
     python -m scripts.seed_demo_large
 """
 
 from __future__ import annotations
 
+import getpass
 import os
+import sys
 import time
 from datetime import date, timedelta
 from decimal import Decimal
@@ -34,15 +40,29 @@ from student_management.models.enums import (
 )
 from student_management.security import hash_password
 
-# These demo logins are PUBLIC sample credentials on purpose (see this script's
-# docstring) so the demo works out of the box; real deployments set their own
-# via the DEMO_* env vars. The trailing suppressions below intentionally keep
-# these sample credentials out of the hard-coded-credential scan findings.
-TEACHER_PASSWORD = os.environ.get("DEMO_TEACHER_PASSWORD", "teacher123")  # NOSONAR
-PARENT_PASSWORD = os.environ.get("DEMO_PARENT_PASSWORD", "parent123")  # NOSONAR
 GUARD_EMAIL = "alice.cohen@schoolsystem.com"
 ALICE_COHEN = "Alice Cohen"
 JANE_SMITH = "Jane Smith"
+
+
+def _demo_password(name: str, prompt: str) -> str:
+    """Return the password from the ``name`` env var (no committed defaults).
+
+    If it is missing, prompt for it only when ``--interactive`` was passed and
+    stdin is a terminal; otherwise abort so non-interactive runs never hang.
+    """
+    value = (os.environ.get(name) or "").strip()
+    if not value and "--interactive" in sys.argv and sys.stdin.isatty():
+        try:
+            value = (getpass.getpass(prompt) or "").strip()
+        except EOFError:
+            value = ""
+    if not value:
+        raise SystemExit(
+            f"{name} is not set — supply it via the environment "
+            "(or run with --interactive to be prompted). Aborting."
+        )
+    return value
 
 NEW_TEACHERS = [
     {
@@ -138,7 +158,7 @@ def already_seeded(session) -> bool:
     )
 
 
-def _seed_teachers(session) -> tuple[dict[str, Teacher], Teacher]:
+def _seed_teachers(session, teacher_password: str) -> tuple[dict[str, Teacher], Teacher]:
     """Create the NEW_TEACHERS logins and return them keyed by name plus Jane."""
     teachers: dict[str, Teacher] = {}
     for spec in NEW_TEACHERS:
@@ -153,7 +173,7 @@ def _seed_teachers(session) -> tuple[dict[str, Teacher], Teacher]:
         session.add(
             User(
                 email=spec["email"],
-                password_hash=hash_password(TEACHER_PASSWORD),
+                password_hash=hash_password(teacher_password),
                 role="teacher",
                 teacher_id=teacher.teacher_id,
             )
@@ -208,7 +228,7 @@ def _seed_courses(
     return courses
 
 
-def _seed_parents(session, students_by_grade: dict[str, list[Student]]) -> None:
+def _seed_parents(session, students_by_grade: dict[str, list[Student]], parent_password: str) -> None:
     for name, email, phone, child_names in NEW_PARENTS:
         parent = Parent(name=name, email=email, phone=phone)
         parent.students = [
@@ -220,7 +240,7 @@ def _seed_parents(session, students_by_grade: dict[str, list[Student]]) -> None:
         session.add(
             User(
                 email=email,
-                password_hash=hash_password(PARENT_PASSWORD),
+                password_hash=hash_password(parent_password),
                 role="parent",
                 parent_id=parent.parent_id,
             )
@@ -278,10 +298,13 @@ def _seed_grades(session, courses: dict[str, Course], today: date) -> None:
 
 
 def build(session) -> None:
-    teachers, jane = _seed_teachers(session)
+    teacher_password = _demo_password("DEMO_TEACHER_PASSWORD", "Demo teacher password (hidden): ")
+    parent_password = _demo_password("DEMO_PARENT_PASSWORD", "Demo parent password (hidden): ")
+
+    teachers, jane = _seed_teachers(session, teacher_password)
     students_by_grade = _seed_students(session)
     courses = _seed_courses(session, teachers, jane, students_by_grade)
-    _seed_parents(session, students_by_grade)
+    _seed_parents(session, students_by_grade, parent_password)
 
     today = date.today()
     days = recent_school_days(10, today)
@@ -296,9 +319,10 @@ def build(session) -> None:
     print(f"grades: {len(ASSIGNMENTS)} assignments x {len(courses)} courses x 8 students/course")
     print(
         "New logins — teachers: "
-        + ", ".join(f"{t['email']} / {TEACHER_PASSWORD}" for t in NEW_TEACHERS)
+        + ", ".join(f"{t['email']}" for t in NEW_TEACHERS)
         + "; parents: "
-        + ", ".join(f"{email} / {PARENT_PASSWORD}" for _, email, _, _ in NEW_PARENTS)
+        + ", ".join(f"{email}" for _, email, _, _ in NEW_PARENTS)
+        + " (all use the DEMO_TEACHER_PASSWORD / DEMO_PARENT_PASSWORD you supplied)"
     )
 
 

@@ -95,7 +95,7 @@ export default function Login() {
           </button>
           {brand.demo && (
             <p className="hint">
-              Demo admin: admin@schoolsystem.com / changeme123
+              Demo admin login: admin@schoolsystem.com (password chosen at seed time)
             </p>
           )}
         </form>

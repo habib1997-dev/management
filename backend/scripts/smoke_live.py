@@ -3,19 +3,21 @@
 Usage:
     python scripts/smoke_live.py [BASE_URL]
 
-Defaults to http://localhost:8199. Credentials may be overridden via env vars:
+Defaults to http://localhost:8199. Emails default as listed; PASSWORDS are
+required and must be supplied via env vars (no defaults are committed):
 
     SMOKE_ADMIN_EMAIL      (default admin@schoolsystem.com)
-    SMOKE_ADMIN_PASSWORD   (default changeme123)
+    SMOKE_ADMIN_PASSWORD   (required)
     SMOKE_TEACHER_EMAIL    (default jane.smith@schoolsystem.com)
-    SMOKE_TEACHER_PASSWORD (default teacher123)
+    SMOKE_TEACHER_PASSWORD (required)
     SMOKE_PARENT_EMAIL     (default maria.doe@family.net)
-    SMOKE_PARENT_PASSWORD  (default parent123)
+    SMOKE_PARENT_PASSWORD  (required)
 
 Standard-library only, so it runs anywhere (local uvicorn, Docker container,
 or the Render deployment) with zero extra dependencies.
 
-Exit code 0 = every check passed; 1 = at least one check failed.
+Exit code 0 = every check passed; 1 = at least one check failed; 2 = a required
+env var is missing.
 """
 
 from __future__ import annotations
@@ -31,6 +33,14 @@ DEFAULT_BASE = "http://localhost:8199"
 LOGIN_ISSUED = "token issued"
 
 FAILURES: list[str] = []
+
+
+def _required_env(name: str) -> str:
+    value = (os.environ.get(name) or "").strip()
+    if not value:
+        print(f"Missing required env var {name} — supply it (e.g. `$env:{name}='...'`) and re-run.")
+        sys.exit(2)
+    return value
 
 
 def request(method: str, url: str, *, token: str | None = None, body: dict | None = None) -> tuple[int, object]:
@@ -110,7 +120,7 @@ def _smoke_admin(base: str, token: str) -> str | None:
 
 def _smoke_teacher(base: str) -> tuple[str | None, str | None]:
     teacher = os.environ.get("SMOKE_TEACHER_EMAIL", "jane.smith@schoolsystem.com")
-    teacher_pw = os.environ.get("SMOKE_TEACHER_PASSWORD", "teacher123")
+    teacher_pw = _required_env("SMOKE_TEACHER_PASSWORD")
     token, data = _login_check(base, teacher, teacher_pw, "teacher")
     if token is None:
         return None, None
@@ -132,7 +142,7 @@ def _smoke_teacher(base: str) -> tuple[str | None, str | None]:
 
 def _smoke_parent(base: str) -> None:
     parent = os.environ.get("SMOKE_PARENT_EMAIL", "maria.doe@family.net")
-    parent_pw = os.environ.get("SMOKE_PARENT_PASSWORD", "parent123")
+    parent_pw = _required_env("SMOKE_PARENT_PASSWORD")
     token, data = _login_check(base, parent, parent_pw, "parent")
     if token is None:
         return
@@ -209,7 +219,7 @@ def _smoke_spa(base: str) -> None:
 def main() -> int:
     base = os.environ.get("SMOKE_BASE_URL") or (sys.argv[1] if len(sys.argv) > 1 else DEFAULT_BASE)
     admin = os.environ.get("SMOKE_ADMIN_EMAIL", "admin@schoolsystem.com")
-    admin_pw = os.environ.get("SMOKE_ADMIN_PASSWORD", "changeme123")
+    admin_pw = _required_env("SMOKE_ADMIN_PASSWORD")
 
     print(f"Smoke test against: {base}")
     _smoke_health_and_brand(base)

@@ -72,8 +72,8 @@ Render will automatically:
        python -m scripts.create_admin
    ```
 
-   The script refuses short passwords (< 12 chars) and the demo default
-   `changeme123`.  Then remove `ADMIN_EMAIL`/`ADMIN_PASSWORD` from the
+   The script refuses short passwords (< 12 chars) and the seeded demo
+   password (which is never used in production).  Then remove `ADMIN_EMAIL`/`ADMIN_PASSWORD` from the
    service's Environment settings — the account already exists and is never
    recreated (re-runs are safe no-ops that keep the existing password).
 4. Log in with that admin account and run through the smoke test:

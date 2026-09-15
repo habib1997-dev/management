@@ -49,10 +49,10 @@ describe('Login page', () => {
 
     renderLogin()
     await user1.type(screen.getByLabelText('Email'), 'admin@schoolsystem.com')
-    await user1.type(screen.getByLabelText('Password'), 'changeme123')
+    await user1.type(screen.getByLabelText('Password'), 'demo-admin-password')
     await user1.click(screen.getByRole('button', { name: /sign in/i }))
 
-    await waitFor(() => expect(mocks.login).toHaveBeenCalledWith('admin@schoolsystem.com', 'changeme123'))
+    await waitFor(() => expect(mocks.login).toHaveBeenCalledWith('admin@schoolsystem.com', 'demo-admin-password'))
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/students'))
   })
 

@@ -202,7 +202,7 @@ POST http://127.0.0.1:8000/api/v1/auth/login
 ```
 
 ```json
-{ "email": "admin@schoolsystem.com", "password": "password123" }
+{ "email": "admin@your-school.org", "password": "your-password-here" }
 ```
 
 ```json
@@ -504,7 +504,7 @@ One admin login is created by the database seeder (from `backend/`):
 python -m scripts.seed
 ```
 
-That creates the admin account `admin@schoolsystem.com` with password `changeme123` (dev only — in **production** the seeder never runs; the first admin is created once via `python -m scripts.create_admin` with a private password, see `deployment.md` Step 3). Teacher and parent accounts are created through the admin flows above — either by passing an optional `password` when creating the teacher/parent, or later via the `POST /api/v1/teachers/{teacher_id}/account` / `POST /api/v1/parents/{parent_id}/account` endpoints. Each account has its own login credentials, and login is role-scoped (admin/teacher/parent).
+That creates the admin account `admin@schoolsystem.com`. The admin password is **not** committed anywhere — it comes from the `ADMIN_PASSWORD` environment variable (or an interactive prompt with `--interactive`), and the demo teacher/parent logins use `DEMO_TEACHER_PASSWORD` / `DEMO_PARENT_PASSWORD`. This is dev only — in **production** the seeder never runs; the first admin is created once via `python -m scripts.create_admin` with a private password, see `deployment.md` Step 3. Teacher and parent accounts are created through the admin flows above — either by passing an optional `password` when creating the teacher/parent, or later via the `POST /api/v1/teachers/{teacher_id}/account` / `POST /api/v1/parents/{parent_id}/account` endpoints. Each account has its own login credentials, and login is role-scoped (admin/teacher/parent).
 
 ## Directory Structure
 
